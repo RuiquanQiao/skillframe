@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}}</title>
+  <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; background: Canvas; color: CanvasText; }
+    skillframe-chat { border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent); min-height: 0; }
+    main { padding: 24px 32px; overflow: auto; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    ul { list-style: none; padding: 0; margin: 0; max-width: 60ch; }
+    li { display: flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 4px; overflow-wrap: anywhere; }
+    li[aria-selected="true"] { background: color-mix(in srgb, CanvasText 8%, transparent); }
+    li.done span { text-decoration: line-through; opacity: .6; }
+    li input { width: 18px; height: 18px; margin: 0; flex: none; align-self: center; cursor: pointer; }
+    #status { color: GrayText; font-size: 13px; min-height: 1.4em; }
+    @media (max-width: 700px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } }
+  </style>
+</head>
+<body>
+  <skillframe-chat endpoint="/sf"></skillframe-chat>
+  <main>
+    <h1>{{title}}</h1>
+    <ul id="todos"></ul>
+    <p id="status" role="status"></p>
+  </main>
+  <script type="module">
+    const chat = document.querySelector("skillframe-chat");
+    const list = document.getElementById("todos");
+    const status = document.getElementById("status");
+    let file = { text: "[]", hash: "" }; // todos.json as last read, with its version
+    let selected = null;
+
+    const todos = () => { try { return JSON.parse(file.text); } catch { return []; } };
+
+    async function load() {
+      file = await (await fetch("/sf/files?path=todos.json")).json();
+      draw();
+    }
+
+    function draw() {
+      list.replaceChildren(...todos().map((t) => {
+        const li = document.createElement("li");
+        li.className = t.done ? "done" : "";
+        li.setAttribute("aria-selected", String(t.id === selected));
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = t.done;
+        box.setAttribute("aria-label", t.text);
+        box.onchange = () => save(todos().map((x) => (x.id === t.id ? { ...x, done: box.checked } : x)));
+        const text = document.createElement("span");
+        text.textContent = t.text;
+        text.onclick = () => { selected = t.id; chat.setScreen({ selected }); draw(); };
+        li.append(box, text);
+        return li;
+      }));
+    }
+
+    // written on top of the version shown: if the agent changed the file since, nothing is overwritten
+    async function save(next) {
+      const res = await fetch("/sf/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: "todos.json", text: JSON.stringify(next, null, 2) + "\n", baseHash: file.hash }),
+      });
+      if (res.status === 409) {
+        file = (await res.json()).current;
+        status.textContent = "The agent changed the list just now. This is the latest; check it again if you still want to.";
+        draw();
+        return;
+      }
+      status.textContent = "";
+      await load();
+    }
+
+    // the agent changed todos.json (through a tool or by editing it): redraw
+    chat.addEventListener("file-changed", (e) => { if (e.detail.path === "todos.json" && e.detail.hash !== file.hash) load(); });
+    load();
+  </script>
+</body>
+</html>

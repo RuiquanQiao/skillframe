@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "examples/*"
+    "examples/hello"
   ],
   "scripts": {
     "build": "tsc -b packages/skillframe examples/hello",

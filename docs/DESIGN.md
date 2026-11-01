@@ -249,7 +249,7 @@ resume-studio 保持原样，只当参考。下表是"读哪里、在 skillframe
 | M1 打通（2026-11-01 完成） | Claude Code driver（TS）+ 最简 HTTP/SSE + 一个能聊天的页面；验证 MCP 挂载（4.2 的待验证项） | 在示例页面里跟自己的 Claude Code 对话，agent 能调用一个宿主 app 声明的工具 |
 | M2 联动（2026-11-01 完成） | 三条通道、示例、Codex driver | agent 改共享文件，右边立刻刷新；Codex 跑同样的流程。实际做法：示例沿用 Hello Notes，笔记存进 `workspace/notes.json`（JSON 而不是 YAML，核心不必多一个 YAML 依赖）。真实的 Claude Code 直接改文件、真实的 Codex 先用 app 工具再直接改文件，右边都自动刷新 |
 | M3 好用（2026-11-01 完成） | agent 栏补齐卡片和交互、ACP driver、中英文、假 agent 测试全套 | 功能达到 resume-studio 左边栏的水平。实际做了：权限模式和模型选择器（Claude Code 回复中途也能切换）、任务列表、附件（图片直接给 agent 看，其他文件给路径让 agent 自己读）、从任意一条回复分叉、展开的步骤在重绘后保持展开、ACP driver（真实的 Qwen Code 握手成功，但本机 Qwen 没登录，完整对话未验证）、浏览器界面测试。没做：Pi driver（优先级最低，留到以后）；选择器里的模式名、登录提示目前只有英文 |
-| M4 发布 | 脚手架、Electron 示例、README、PROTOCOL.md、60 秒演示视频 | 一个没见过它的开发者照 README 5 分钟跑起来 |
+| M4 发布（2026-11-01 完成，视频待录） | 脚手架、Electron 示例、README、PROTOCOL.md、60 秒演示视频 | 一个没见过它的开发者照 README 5 分钟跑起来。实际做了：`create-skillframe`（生成一个 todo 示例，数据放在系统约定的应用数据目录，不放进源码仓库）、`examples/electron`（启动后自检侧边栏画出来再退出：Electron 38.8.6 通过）、`docs/PROTOCOL.md`、README 重写、MIT LICENSE、npm 发布内容检查（写成测试）、三个系统 × Node 22/24 的 CI 配置（还没有远程仓库，没真跑过）、`docs/DEMO.md` 拍摄脚本。冷启动实测：全新拷贝的仓库 `npm install` + `npm test` 10 秒全过；脚手架生成的 app 接真实 Claude Code 跑通演示脚本的主镜头。还没发布到 npm |
 | M5 验证 | 发 Hacker News、X、Reddit、V2EX；你自己的下一个项目基于它来做 | 发布后 4 周内有没有别人用它做的 app |
 
 ---

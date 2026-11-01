@@ -16,6 +16,7 @@ import { FileChannel } from "./files.js";
 
 export type { ToolSpec, ToolContext, ToolInput } from "./mcp.js";
 export { Conflict, type FileVersion } from "./files.js";
+export { appDataDir } from "./paths.js";
 export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision, Attachment, Task } from "./chat/types.js";
 import type { Attachment, ChatMeta } from "./chat/types.js";
 import { AGENTS, agentCommand, agentDef } from "./agents.js";

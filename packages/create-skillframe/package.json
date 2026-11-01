@@ -1,0 +1,19 @@
+{
+  "name": "create-skillframe",
+  "version": "0.1.0",
+  "description": "Start an app with a sidebar that runs your users' own coding agent: npm create skillframe my-app",
+  "keywords": ["skillframe", "create", "scaffold", "claude-code", "codex"],
+  "author": "Ruiquan Qiao",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-skillframe": "index.js"
+  },
+  "files": [
+    "index.js",
+    "template"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

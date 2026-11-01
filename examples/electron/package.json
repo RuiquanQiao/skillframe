@@ -1,0 +1,16 @@
+{
+  "name": "skillframe-example-electron",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke"
+  },
+  "dependencies": {
+    "skillframe": "file:../../packages/skillframe"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  }
+}

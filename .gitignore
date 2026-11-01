@@ -4,3 +4,4 @@ dist/
 .cache/
 .data/
 examples/*/workspace/
+packages/skillframe/README.md
