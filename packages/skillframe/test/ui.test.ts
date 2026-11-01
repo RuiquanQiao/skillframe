@@ -205,6 +205,25 @@ describe("the sidebar in a browser", async () => {
     await page.close();
   });
 
+  test("in Chinese, the built-in agents' modes and sign-in hint are in Chinese too", { skip: !browser }, async () => {
+    const { page } = await open();
+    await page.locator("skillframe-chat select[aria-label='Permission mode'] option[value='plan']").waitFor({ state: "attached" });
+    const shown = await page.evaluate(() => {
+      const el = document.querySelector("skillframe-chat") as any;
+      el.setAttribute("lang", "zh");
+      el.state.app.agents.find((a: any) => a.id === "claude").signedIn = false; // as on a machine where it isn't
+      el.render();
+      const root = el.shadowRoot;
+      const plan = root.querySelector("select option[value='plan']");
+      return { mode: plan.textContent, desc: plan.title, empty: root.querySelector(".empty").textContent };
+    });
+    assert.deepEqual([shown.mode, shown.desc], ["先出计划", "只读；先提出计划，你批准后再动手"]);
+    assert.match(shown.empty, /看起来还没登录。打开终端，运行 claude/);
+    await page.setViewportSize({ width: 320, height: 700 });
+    assert.deepEqual(await spills(page), { out: [], sideways: false, page: false });
+    await page.close();
+  });
+
   test("a new chat on another agent gets that agent's pickers (not only chats opened at load)", { skip: !browser }, async () => {
     const { page } = await open("codex");
     await say(page, "hello");

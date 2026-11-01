@@ -98,6 +98,22 @@ const STRINGS = {
     fork: "从这里分叉",
     forkHint: "新开一个对话，从这条回复接着往下",
     tooBig: "{name} 超过 15 MB，请换一个小一点的文件。",
+    // the built-in agents' text, which the server sends in English (see local())
+    "login.claude": "打开终端，运行 `claude`，输入 `/login`，然后在浏览器里完成登录。",
+    "login.codex": "打开终端，运行 `codex login`（用 ChatGPT 账号或 API key 登录）。",
+    "login.qwen": "打开终端，运行 `qwen`，选择登录方式（`/auth`）。",
+    "mode.claude.default": "编辑前先问",
+    "mode.claude.acceptEdits": "直接编辑",
+    "mode.claude.plan": "先出计划",
+    "modeDesc.claude.default": "编辑文件或运行命令前先征求同意",
+    "modeDesc.claude.acceptEdits": "直接编辑文件；有风险的命令仍会先问",
+    "modeDesc.claude.plan": "只读；先提出计划，你批准后再动手",
+    "mode.codex.default": "编辑前先问",
+    "mode.codex.acceptEdits": "直接编辑",
+    "mode.codex.plan": "只读",
+    "modeDesc.codex.default": "运行它不确定是否安全的操作前先问",
+    "modeDesc.codex.acceptEdits": "在工作文件夹里直接干活；需要更多权限时再问",
+    "modeDesc.codex.plan": "只能查看，不能改动任何东西",
   },
 };
 
@@ -289,6 +305,12 @@ class SkillframeChat extends HTMLElement {
     const lang = (this.getAttribute("lang") || navigator.language || "en").slice(0, 2);
     const s = (STRINGS[lang] || STRINGS.en)[key] ?? STRINGS.en[key] ?? key;
     return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+  }
+
+  /** text the server sent (in English), in the page's language when this file has it */
+  local(key, text) {
+    const lang = (this.getAttribute("lang") || navigator.language || "en").slice(0, 2);
+    return STRINGS[lang]?.[key] ?? text;
   }
 
   get agents() {
@@ -603,8 +625,9 @@ class SkillframeChat extends HTMLElement {
     const { messages, error } = this.state;
     if (!messages.length && !this.state.live && this.state.app) {
       const a = this.agent;
-      const hint = a && !a.installed ? this.t("notInstalled", { agent: a.name, install: a.install, login: a.login })
-        : a && a.signedIn === false ? this.t("signedOut", { agent: a.name, login: a.login })
+      const login = a && this.local(`login.${a.id}`, a.login);
+      const hint = a && !a.installed ? this.t("notInstalled", { agent: a.name, install: a.install, login })
+        : a && a.signedIn === false ? this.t("signedOut", { agent: a.name, login })
         : this.t("empty", { agent: this.agentName, app: this.state.app?.appName || "this app" });
       this.log.append(h("div", { class: "empty", html: md(hint) }));
     }
@@ -643,7 +666,7 @@ class SkillframeChat extends HTMLElement {
     if (m.cancelled) node.append(h("div", { class: "note" }, this.t("stopped")));
     if (m.error) node.append(h("div", { class: "error", html: md(m.error) }));
     // an agent that isn't signed in says so in its own words: add how to sign in to it
-    if (m.error && /auth|log ?in|sign ?in|credential|api key/i.test(m.error) && this.agent?.login) node.append(h("div", { class: "note", html: md(this.agent.login) }));
+    if (m.error && /auth|log ?in|sign ?in|credential|api key/i.test(m.error) && this.agent?.login) node.append(h("div", { class: "note", html: md(this.local(`login.${this.agent.id}`, this.agent.login)) }));
     // fork: a saved reply that marks a point in the session (the newest one always does)
     if (index !== undefined && this.agent?.fork && !this.isBusy() && (m.point || last) && !m.error) {
       node.append(h("div", { class: "acts" }, h("button", { class: "link", title: this.t("forkHint"), onclick: () => this.fork(index) }, this.t("fork"))));
@@ -847,7 +870,10 @@ class SkillframeChat extends HTMLElement {
     if (meta && opts?.modes?.length) {
       pickers.push(h("select", { "aria-label": this.t("mode"), title: this.t("mode"), onchange: (e) => this.changeSetting({ mode: e.target.value }) },
         h("option", { value: "", selected: !meta.mode }, this.t("asSetUp")),
-        opts.modes.map((m) => h("option", { value: m.id, selected: m.id === meta.mode, title: m.desc || undefined }, m.name))));
+        opts.modes.map((m) => h("option", {
+          value: m.id, selected: m.id === meta.mode,
+          title: m.desc ? this.local(`modeDesc.${meta.agent}.${m.id}`, m.desc) : undefined,
+        }, this.local(`mode.${meta.agent}.${m.id}`, m.name)))));
     }
     if (meta && opts?.models?.length) {
       pickers.push(h("select", { "aria-label": this.t("model"), title: this.t("model"), onchange: (e) => this.changeSetting({ model: e.target.value }) },
