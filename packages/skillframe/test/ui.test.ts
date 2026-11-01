@@ -64,12 +64,16 @@ describe("the sidebar in a browser", async () => {
     await sf?.close();
   });
 
-  /** a page showing a fresh chat of `agent` (the sidebar opens the newest chat) */
+  /** a page showing a fresh chat of `agent` */
   async function open(agent = "claude", size = { width: 420, height: 760 }) {
     const id = (await request(`${url}/sf/chats`, "POST", { agent })).json.id as string;
     const page = await browser!.newPage({ viewport: size });
     page.setDefaultTimeout(10_000);
     await page.goto(url + "/");
+    // the sidebar opens the most recently updated chat, and an earlier test's chat can still be
+    // updated as its agent exits: once the first load is done, open this one by its id
+    await page.waitForFunction(() => !!(document.querySelector("skillframe-chat") as any)?.state?.meta);
+    await page.evaluate((chatId) => (document.querySelector("skillframe-chat") as any).open(chatId), id);
     await page.locator(`skillframe-chat textarea[placeholder="Message ${agent === "claude" ? "Claude Code" : "Codex"}…"]`).waitFor();
     return { page, id };
   }
