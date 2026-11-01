@@ -28,7 +28,7 @@ function say(text) {
   for (const piece of text.match(/.{1,4}/gs) ?? [""]) {
     out({ type: "stream_event", session_id: session, event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: piece } } });
   }
-  out({ type: "assistant", session_id: session, message: { model: "fake-model", content: [{ type: "text", text }] } });
+  out({ type: "assistant", session_id: session, uuid: `u-${++n}`, message: { model: "fake-model", content: [{ type: "text", text }] } });
 }
 
 function done(text, extra = {}) {
@@ -47,7 +47,35 @@ async function mcp(config, body) {
   return res.status === 202 ? null : res.json();
 }
 
-async function reply(text) {
+async function reply(text, content) {
+  if (text === "images?") {
+    const kinds = Array.isArray(content) ? content.map((b) => (b.type === "image" ? `image:${b.source.media_type}:${b.source.data.length > 0}` : b.type)) : ["string"];
+    say(kinds.join(","));
+    return done("images");
+  }
+  if (text === "question") {
+    const r = await ask({ subtype: "can_use_tool", tool_name: "AskUserQuestion", input: { questions: [{ question: "Which color?", header: "Color", multiSelect: false, options: [{ label: "Red", description: "warm" }, { label: "Blue", description: "cool" }] }] } });
+    const answer = r.behavior === "allow" ? `answered: ${JSON.stringify(r.updatedInput.answers)}` : "skipped";
+    say(answer);
+    return done(answer);
+  }
+  if (text === "plan") {
+    const r = await ask({ subtype: "can_use_tool", tool_name: "ExitPlanMode", input: { plan: "1. Read notes\n2. Add **milk**" } });
+    const answer = r.behavior === "allow" ? `approved: ${r.updatedPermissions?.[0]?.mode}` : "revise";
+    say(answer);
+    return done(answer);
+  }
+  if (text === "long") {
+    const long = "x".repeat(400);
+    say(`Here: https://example.com/${"a".repeat(300)}?q=${"b".repeat(100)} and ${long}\n\n\`\`\`\n${"y".repeat(500)}\n\`\`\``);
+    return done("long");
+  }
+  if (text === "todo") {
+    out({ type: "assistant", session_id: session, uuid: `u-${++n}`, message: { model: "fake-model", content: [{ type: "tool_use", id: "td-1", name: "TodoWrite", input: { todos: [{ content: "Read notes", status: "completed", activeForm: "Reading" }, { content: "Add milk", status: "in_progress", activeForm: "Adding" }] } }] } });
+    out({ type: "user", session_id: session, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "td-1", content: "ok" }] } });
+    say("planned");
+    return done("planned");
+  }
   if (text === "hello") {
     say("Hi there");
     return done("Hi there");
@@ -111,7 +139,9 @@ lines.on("line", (line) => {
   } else if (msg.type === "control_request" && msg.request.subtype === "interrupt") {
     interrupted?.();
   } else if (msg.type === "user") {
-    chain = chain.then(() => reply(String(msg.message.content)));
+    const content = msg.message.content;
+    const text = Array.isArray(content) ? content.filter((b) => b.type === "text").map((b) => b.text).join("") : String(content);
+    chain = chain.then(() => reply(text.split("\n\nAttached files")[0], content));
   }
 });
 lines.on("close", () => chain.then(() => process.exit(0)));

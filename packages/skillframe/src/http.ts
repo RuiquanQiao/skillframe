@@ -6,6 +6,7 @@
 // state must come from the same origin as JSON (a web page elsewhere can neither send it nor read
 // the answer), and the MCP endpoint wants the token only our own agent processes were given.
 import { createReadStream, existsSync, statSync } from "node:fs";
+import { IMAGE_TYPES } from "./chat/store.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,7 @@ import { Busy, NotFound } from "./chat/runner.js";
 import { Conflict, OutsideWatch } from "./files.js";
 
 const UI_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../ui");
-const BODY_CAP = 5 * 1024 * 1024;
+const BODY_CAP = 25 * 1024 * 1024; // an attachment arrives as base64 in JSON
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -160,6 +161,8 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
       return { path: v.path, hash: v.hash };
     }
   }
+  const agentRoute = route.match(/^\/agents\/([\w-]+)\/options$/);
+  if (method === "GET" && agentRoute) return core.agentOptions(agentRoute[1]);
   if (method === "GET" && route === "/chats") return { chats: store.list(), running: [...runner.turns.keys()] };
   if (method === "POST" && route === "/chats") {
     const agent = typeof b.agent === "string" && core.agentIds.includes(b.agent) ? b.agent : core.agentIds[0];
@@ -178,9 +181,30 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
   if (id && action === "/send" && method === "POST") {
     const text = String(b.text ?? "").trim();
     if (!text) throw new HttpError(400, "The message is empty");
-    const r = await core.send(id, { text, shown: typeof b.shown === "string" ? b.shown : undefined, screen: b.screen });
+    // attachments are named by the paths /upload gave; only files in this chat's own folder are taken
+    const dir = store.filesDir(id);
+    const files = (Array.isArray(b.files) ? b.files : []).map((f: any) => {
+      const p = path.resolve(String(f?.path ?? ""));
+      if (!p.startsWith(dir + path.sep) || !existsSync(p)) throw new HttpError(400, `Not an attachment of this chat: ${f?.name ?? p}`);
+      const type = String(f?.type ?? "");
+      return { name: path.basename(p), path: p, type, image: IMAGE_TYPES.includes(type) };
+    });
+    const r = await core.send(id, { text, shown: typeof b.shown === "string" ? b.shown : undefined, screen: b.screen, files });
     return { ok: true, ...r };
   }
+  if (id && action === "/upload" && method === "POST") {
+    if (!store.meta(id)) throw new NotFound("Chat not found");
+    if (typeof b.name !== "string" || typeof b.data !== "string") throw new HttpError(400, "Send { name, type, data (base64) }");
+    return store.saveFile(id, b.name, String(b.type ?? ""), Buffer.from(b.data, "base64"));
+  }
+  if (id && action === "/settings" && method === "POST") {
+    const change: { mode?: string; model?: string } = {};
+    if (typeof b.mode === "string") change.mode = b.mode;
+    if (typeof b.model === "string") change.model = b.model; // "" = the agent's default
+    runner.settings(id, change);
+    return store.meta(id);
+  }
+  if (id && action === "/fork" && method === "POST") return core.fork(id, Number(b.at));
   if (id && action === "/answer" && method === "POST") {
     return { ok: true, ask: runner.answer(id, String(b.requestId ?? ""), b.decision ?? {}) };
   }

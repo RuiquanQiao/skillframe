@@ -8,7 +8,8 @@ import { kill, start } from "../spawn.js";
 import type { Driver, McpLink, TurnSpec } from "../drivers/driver.js";
 import { driverFor } from "../drivers/index.js";
 import type { ChatStore } from "./store.js";
-import type { AskBlock, Block, Decision, Message, ToolBlock, UserMessage } from "./types.js";
+import path from "node:path";
+import type { AskBlock, Attachment, Block, Decision, Message, Task, ToolBlock, UserMessage } from "./types.js";
 
 const now = () => Math.round(Date.now()) / 1000;
 const STDERR_CAP = 20_000;
@@ -17,6 +18,13 @@ export interface QueueItem {
   id: string;
   msg: UserMessage;
   prompt: string;
+  images: Attachment[];
+}
+
+/** What an agent offers to pick from (filled in as the agent reports it). */
+export interface AgentOptions {
+  modes: { id: string; name: string; desc?: string }[];
+  models: { id: string; name: string; desc?: string }[];
 }
 
 export class Turn {
@@ -35,6 +43,8 @@ export class Turn {
   error: string | null = null;
   flushedAny = false;
   replyStartedAt = now();
+  /** where the agent's session stands after the current reply (a fork point) */
+  point?: string;
 
   constructor(
     readonly chatId: string,
@@ -64,6 +74,8 @@ export interface SendOptions {
   /** a note for the agent about what the user is looking at, added to its system prompt */
   context?: string;
   addDirs?: string[];
+  /** files the user attached (already saved in the chat's folder) */
+  files?: Attachment[];
   onDone?: (ok: boolean) => void;
 }
 
@@ -82,6 +94,8 @@ export interface RunnerOptions {
 
 export class ChatRunner {
   readonly turns = new Map<string, Turn>();
+  /** modes and models each agent reported about itself */
+  readonly learned = new Map<string, AgentOptions>();
 
   constructor(readonly opts: RunnerOptions) {}
 
@@ -102,11 +116,16 @@ export class ChatRunner {
   send(chatId: string, o: SendOptions): { queued: boolean; id?: string } {
     const chat = this.store.meta(chatId);
     if (!chat) throw new NotFound(`chat ${chatId} not found`);
-    const msg: UserMessage = { role: "user", text: o.shown ?? o.text, at: now() };
+    const files = o.files ?? [];
+    const msg: UserMessage = { role: "user", text: o.shown ?? o.text, at: now(), ...(files.length ? { files } : {}) };
+    const images = files.filter((f) => f.image);
+    const others = files.filter((f) => !f.image);
+    // other files: the agent reads them itself (its Read tool handles PDFs, documents, code)
+    const prompt = others.length ? `${o.text}\n\nAttached files (read them):\n${others.map((f) => `- ${f.path}`).join("\n")}` : o.text;
     let turn = this.turns.get(chatId);
     if (turn && !turn.closed && !turn.cancelled) {
       if (o.onDone) throw new Busy("This chat is still replying; wait or stop it first.");
-      const item = { id: Math.random().toString(36).slice(2, 10), msg, prompt: o.text };
+      const item = { id: Math.random().toString(36).slice(2, 10), msg, prompt, images };
       turn.queue.push(item);
       this.emit("chat.queue", chatId, { queue: turn.queue });
       return { queued: true, id: item.id };
@@ -121,14 +140,15 @@ export class ChatRunner {
     this.store.update(chatId, chat.title ? {} : { title: titleFrom(o.shown ?? o.text) });
 
     turn = new Turn(chatId, o.onDone);
-    turn.driver = driverFor(def.id);
+    turn.driver = driverFor(def);
     turn.runner = this;
     this.turns.set(chatId, turn);
     const spec: TurnSpec = {
       chat,
-      prompt: o.text,
+      prompt,
+      images,
       context: o.context ?? "",
-      addDirs: o.addDirs ?? [],
+      addDirs: [...new Set([...(o.addDirs ?? []), ...files.map((f) => path.dirname(f.path))])],
       cwd: this.opts.cwd,
       runDir: this.opts.runDir,
       allowedTools: this.opts.allowedTools,
@@ -147,6 +167,15 @@ export class ChatRunner {
     if (mode) this.store.update(chatId, { mode }, false);
     this.emit("chat.ask", chatId, { ask });
     return ask;
+  }
+
+  /** a picker changed: kept on the chat for its next replies, and applied to the running one where the agent can */
+  settings(chatId: string, change: { mode?: string; model?: string }): void {
+    if (!this.store.meta(chatId)) throw new NotFound("Chat not found");
+    this.store.update(chatId, change, false);
+    const turn = this.turns.get(chatId);
+    if (turn && !turn.closed) turn.driver.setLive?.(turn, change);
+    this.emit("chat.meta", chatId, { meta: this.store.meta(chatId) });
   }
 
   cancel(chatId: string): void {
@@ -236,7 +265,7 @@ export class ChatRunner {
     this.store.append(turn.chatId, item.msg);
     this.store.update(turn.chatId, {});
     this.emit("chat.next", turn.chatId, { message: item.msg, queue: turn.queue, startedAt: turn.replyStartedAt });
-    return turn.driver.send(turn, item.prompt);
+    return turn.driver.send(turn, item.prompt, item.images);
   }
 
   /** One reply is complete: save it and start a fresh assistant message. */
@@ -251,6 +280,7 @@ export class ChatRunner {
       cancelled: turn.cancelled,
       cost,
       took: Math.round((now() - turn.replyStartedAt) * 10) / 10,
+      ...(turn.point ? { point: turn.point } : {}),
     };
     this.store.append(turn.chatId, msg);
     turn.error = turn.error ?? error;
@@ -306,6 +336,19 @@ export class ChatRunner {
     tool.status = ok ? "done" : "error";
     tool.result = resultPreview(result);
     this.emit("chat.tool", turn.chatId, { tool });
+  }
+
+  /** the agent's task list changed */
+  tasks(turn: Turn, tasks: Task[]): void {
+    this.store.update(turn.chatId, { tasks }, false);
+    this.emit("chat.tasks", turn.chatId, { tasks });
+  }
+
+  /** an agent said which modes and models it offers */
+  learn(agentId: string, options: AgentOptions): void {
+    const before = JSON.stringify(this.learned.get(agentId));
+    this.learned.set(agentId, options);
+    if (JSON.stringify(options) !== before) this.opts.bus.publish("agent.info", { agent: agentId, ...options });
   }
 
   ask(turn: Turn, ask: AskBlock): void {

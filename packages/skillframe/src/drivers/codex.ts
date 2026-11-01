@@ -7,8 +7,10 @@
 // its token read from SKILLFRAME_MCP_TOKEN, which the runner puts in the process environment.
 import type { ChatRunner, Turn } from "../chat/runner.js";
 import { toolHint } from "../chat/runner.js";
-import type { AskBlock, Decision } from "../chat/types.js";
+import type { AskBlock, Attachment, Decision } from "../chat/types.js";
 import type { Driver, ReplyEnd, TurnSpec } from "./driver.js";
+import { createInterface } from "node:readline";
+import { kill, start, type Command } from "../spawn.js";
 
 type Obj = Record<string, any>;
 
@@ -67,6 +69,44 @@ export class Rpc {
 
 const toml = (s: string) => JSON.stringify(s); // a TOML basic string is a JSON string
 
+/** The models the user's Codex offers, asked from a short-lived `codex app-server` (no model call). */
+export function codexModels(cmd: Command, env: NodeJS.ProcessEnv, timeoutMs = 15_000): Promise<{ id: string; name: string; desc?: string }[]> {
+  return new Promise((resolve) => {
+    let proc: ReturnType<typeof start>;
+    try {
+      proc = start(cmd, ["app-server"], { env, stdio: ["pipe", "pipe", "ignore"] });
+    } catch {
+      return resolve([]);
+    }
+    const done = (models: { id: string; name: string; desc?: string }[]) => {
+      clearTimeout(timer);
+      proc.stdin?.end();
+      kill(proc);
+      resolve(models);
+    };
+    const timer = setTimeout(() => done([]), timeoutMs);
+    proc.on("error", () => done([]));
+    proc.stdin?.on("error", () => {});
+    const write = (o: Obj) => proc.stdin?.write(JSON.stringify(o) + "\n");
+    createInterface({ input: proc.stdout! }).on("line", (line) => {
+      let msg: Obj;
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (msg.id === 1) {
+        write({ jsonrpc: "2.0", method: "initialized" });
+        write({ jsonrpc: "2.0", id: 2, method: "model/list", params: {} });
+      } else if (msg.id === 2) {
+        const data: Obj[] = msg.result?.data ?? [];
+        done(data.filter((m) => !m.hidden).map((m) => ({ id: m.id ?? m.model, name: m.displayName ?? m.id, desc: m.description ?? "" })));
+      }
+    });
+    write({ jsonrpc: "2.0", id: 1, method: "initialize", params: { clientInfo: { name: "skillframe", version: "0" } } });
+  });
+}
+
 export class CodexDriver implements Driver {
   constructor(private appName = "skillframe") {}
 
@@ -115,19 +155,24 @@ export class CodexDriver implements Driver {
     const started = (r: Obj, e: string | null) => {
       if (e) return this.fail(turn, e);
       s.thread = r?.thread?.id;
-      turn.runner.store.update(turn.chatId, { sessionId: s.thread, model: r?.model ?? chat.model }, false);
+      // a fork gets a thread of its own: from here on the chat resumes that one
+      turn.runner.store.update(turn.chatId, { sessionId: s.thread, fork: undefined }, false);
       turn.runner.emit("chat.init", turn.chatId, { model: r?.model });
-      this.send(turn, spec.prompt);
+      this.send(turn, spec.prompt, spec.images);
     };
     if (chat.sessionId) s.rpc.call("thread/resume", { ...params, threadId: chat.sessionId, excludeTurns: true }, started);
-    else s.rpc.call("thread/start", params, started);
+    else if (chat.fork) {
+      const at = chat.fork.at ? { lastTurnId: chat.fork.at } : {};
+      s.rpc.call("thread/fork", { ...params, threadId: chat.fork.sessionId, excludeTurns: true, ...at }, started);
+    } else s.rpc.call("thread/start", params, started);
   }
 
-  send(turn: Turn, prompt: string): boolean {
+  send(turn: Turn, prompt: string, images: Attachment[] = []): boolean {
     const s = this.st(turn);
     const chat = turn.runner.store.meta(turn.chatId) ?? s.spec.chat;
     const mode = MODES[chat.mode ?? ""] ?? DEFAULT_MODE;
-    const params: Obj = { threadId: s.thread, input: [{ type: "text", text: prompt }], approvalPolicy: mode.approvalPolicy };
+    const input = [{ type: "text", text: prompt || "(see image)" }, ...images.map((im) => ({ type: "localImage", path: im.path }))];
+    const params: Obj = { threadId: s.thread, input, approvalPolicy: mode.approvalPolicy };
     if (chat.model) params.model = chat.model;
     return s.rpc.call("turn/start", params, (r: Obj, e: string | null) => {
       if (e) {
@@ -233,9 +278,20 @@ export class CodexDriver implements Driver {
       case "error":
         if (!p.willRetry) s.error = p.error?.message ?? JSON.stringify(p.error ?? {});
         break;
+      case "turn/plan/updated":
+        runner.tasks(
+          turn,
+          ((p.plan ?? []) as Obj[]).map((step, i) => ({
+            id: String(i + 1),
+            subject: String(step.step ?? ""),
+            status: step.status === "inProgress" ? "in_progress" : step.status === "completed" ? "completed" : "pending",
+          })),
+        );
+        break;
       case "turn/completed": {
         const tr = p.turn ?? {};
         s.turn = null;
+        if (tr.id) turn.point = tr.id; // thread/fork's lastTurnId: fork after this reply
         let error: string | null = null;
         if (tr.status === "failed") error = tr.error?.message ?? s.error ?? "Codex reported an error";
         s.error = null;

@@ -17,6 +17,7 @@ let threadId = null;
 let threadParams = null;
 let threadMethod = null;
 let turnN = 0;
+let lastInput = [];
 let reqN = 100;
 const waiting = new Map(); // our request id -> resolve(result)
 let interrupted = null;
@@ -57,6 +58,15 @@ async function run(turnId, text) {
   notify("turn/started", { threadId, turn: { id: turnId, status: "inProgress", items: [] } });
   if (text === "hello") {
     say(turnId, "Hi there");
+    return complete(turnId);
+  }
+  if (text === "plan") {
+    notify("turn/plan/updated", { threadId, turnId, plan: [{ step: "Look", status: "completed" }, { step: "Write", status: "inProgress" }] });
+    say(turnId, "planned");
+    return complete(turnId);
+  }
+  if (text === "images?") {
+    say(turnId, lastInput.map((i) => i.type).join(","));
     return complete(turnId);
   }
   if (text === "args") {
@@ -122,17 +132,21 @@ lines.on("line", (line) => {
       return reply({ userAgent: "fake-codex/0" });
     case "initialized":
       return;
+    case "model/list":
+      return reply({ data: [{ id: "gpt-fake", displayName: "GPT Fake", description: "a fake model" }, { id: "hidden-one", displayName: "Hidden", hidden: true }] });
     case "thread/start":
     case "thread/resume":
+    case "thread/fork":
       threadMethod = msg.method;
       threadParams = msg.params;
-      threadId = msg.params.threadId ?? "thr-1";
+      threadId = msg.method === "thread/fork" ? "thr-fork" : msg.params.threadId ?? "thr-1";
       notify("thread/started", { thread: { id: threadId } });
       return reply({ thread: { id: threadId }, model: "fake-codex" });
     case "turn/start": {
       const turnId = `turn-${++turnN}`;
       reply({ turn: { id: turnId, status: "inProgress", items: [] } });
-      run(turnId, msg.params.input.map((i) => i.text).join(""));
+      lastInput = msg.params.input;
+      run(turnId, msg.params.input.filter((i) => i.type === "text").map((i) => i.text).join("").split("\n\nAttached files")[0]);
       return;
     }
     case "turn/interrupt":

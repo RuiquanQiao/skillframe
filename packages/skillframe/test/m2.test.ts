@@ -241,8 +241,8 @@ describe("chatting with Codex (fake codex app-server)", () => {
     assert.equal((await request(`${url}/sf/chats/${id}/agent`, "POST", { agent: "nope" })).status, 400);
   });
 
-  test("both agents are listed, with whether they look signed in", async () => {
+  test("every known agent is listed by default, with whether it looks signed in", async () => {
     const r = await request(`${url}/sf/app`, "GET");
-    assert.deepEqual(r.json.agents.map((a: any) => [a.id, a.installed, a.signedIn]), [["claude", true, true], ["codex", true, true]]);
+    assert.deepEqual(r.json.agents.map((a: any) => [a.id, a.installed, a.signedIn]), [["claude", true, true], ["codex", true, true], ["qwen", true, true]]);
   });
 });

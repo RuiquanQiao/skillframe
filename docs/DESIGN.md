@@ -159,7 +159,7 @@ npm create skillframe@latest my-app
 |---|---|---|
 | Claude Code | `claude -p --input-format stream-json --output-format stream-json`，权限请求走 `--permission-prompt-tool stdio` | resume-studio `ClaudeDriver`，用 TS 重写 |
 | Codex | `codex app-server`（Codex 自家 IDE 插件用的 JSON-RPC 接口） | resume-studio `CodexDriver`，用 TS 重写 |
-| Qwen Code、DeepSeek Harness 等 | ACP（Agent Client Protocol，Zed 和 JetBrains 推的开放标准）。TS 版官方 SDK `@agentclientprotocol/sdk` 可以直接用 | resume-studio `AcpDriver`，换成官方 SDK |
+| Qwen Code、DeepSeek Harness 等 | ACP（Agent Client Protocol，Zed 和 JetBrains 推的开放标准） | resume-studio `AcpDriver`，用 TS 重写。原计划用官方 SDK `@agentclientprotocol/sdk`，M3 实际改成自己实现：ACP 本身就是 stdio 上的 JSON-RPC，和 Codex driver 共用同一个 `Rpc` 类，几百行就够，核心包因此保持零运行时依赖 |
 | Pi | `pi --mode rpc` | resume-studio `PiDriver`，用 TS 重写（优先级最低） |
 
 ### 5.2 合规边界（写进 README 第一屏，这是开发者敢用的理由）
@@ -195,7 +195,7 @@ npm create skillframe@latest my-app
 
 - 语言：TypeScript，运行在 Node 22 以上。
 - 开源协议：建议 **MIT**（OpenClaw、career-ops 都是 MIT，开发者最没顾虑）。
-- 依赖尽量少：核心只依赖 ACP 官方 SDK 和 MCP 官方 SDK，HTTP 用 Node 自带的。
+- 依赖尽量少：截至 M3，核心包**零运行时依赖**。HTTP、事件流、MCP server（只实现无状态的最小子集）、Codex 和 ACP 的 JSON-RPC 都用 Node 自带的能力写成。开发依赖只有 TypeScript、`@types/node` 和 `playwright-core`（界面测试用，只是驱动库，不下载浏览器，直接用本机的 Chrome 或 Edge）。
 
 ---
 
@@ -237,7 +237,7 @@ resume-studio 保持原样，只当参考。下表是"读哪里、在 skillframe
 
 - 每个 driver 配一个**假 agent**：一个小脚本，按录好的真实协议记录回放（文字、工具调用、权限请求、出错、中途断开）。测试通过 `SKILLFRAME_<ID>_CMD` 换成假 agent，一条命令跑完全套，只输出一行汇总和失败名单。
 - 协议记录从真实 agent 录一次，存进仓库；agent 升级、协议变了，重录一次，测试立刻告诉你哪里不兼容。
-- 前端组件用无头浏览器测：每种卡片、每种状态、超长内容、窄宽两种宽度、亮暗两种颜色，用脚本量有没有溢出。（M3 做。M2 手动发现并修掉的界面问题要补进去：快速点"新对话"再立刻切 agent，曾经因为新对话还没加载完而被当成旧对话处理。）
+- 前端组件用无头浏览器测：每种卡片、每种状态、超长内容、窄宽两种宽度、亮暗两种颜色，用脚本量有没有溢出。（M3 已做：`test/ui.test.ts`，用本机已装的 Chrome 或 Edge 以无头模式跑，11 个用例。M2 遗留的"快速点新对话再立刻切 agent"问题，M3 写成测试后发现 M2 的修法并不完整：已经开始的对话上点"新对话"时，新对话要等服务器建好，这段时间里切 agent 仍然会按旧对话处理。M3 改成"切换当前对话的操作按顺序一个一个执行"，这个测试在 M2 提交的界面代码上失败、在新代码上通过。）
 - 真 agent 的端到端测试单独一条命令，手动跑，因为它会花额度。
 
 ---
@@ -248,11 +248,16 @@ resume-studio 保持原样，只当参考。下表是"读哪里、在 skillframe
 |---|---|---|
 | M1 打通（2026-11-01 完成） | Claude Code driver（TS）+ 最简 HTTP/SSE + 一个能聊天的页面；验证 MCP 挂载（4.2 的待验证项） | 在示例页面里跟自己的 Claude Code 对话，agent 能调用一个宿主 app 声明的工具 |
 | M2 联动（2026-11-01 完成） | 三条通道、示例、Codex driver | agent 改共享文件，右边立刻刷新；Codex 跑同样的流程。实际做法：示例沿用 Hello Notes，笔记存进 `workspace/notes.json`（JSON 而不是 YAML，核心不必多一个 YAML 依赖）。真实的 Claude Code 直接改文件、真实的 Codex 先用 app 工具再直接改文件，右边都自动刷新 |
-| M3 好用 | agent 栏补齐卡片和交互、ACP driver、中英文、假 agent 测试全套 | 功能达到 resume-studio 左边栏的水平 |
+| M3 好用（2026-11-01 完成） | agent 栏补齐卡片和交互、ACP driver、中英文、假 agent 测试全套 | 功能达到 resume-studio 左边栏的水平。实际做了：权限模式和模型选择器（Claude Code 回复中途也能切换）、任务列表、附件（图片直接给 agent 看，其他文件给路径让 agent 自己读）、从任意一条回复分叉、展开的步骤在重绘后保持展开、ACP driver（真实的 Qwen Code 握手成功，但本机 Qwen 没登录，完整对话未验证）、浏览器界面测试。没做：Pi driver（优先级最低，留到以后）；选择器里的模式名、登录提示目前只有英文 |
 | M4 发布 | 脚手架、Electron 示例、README、PROTOCOL.md、60 秒演示视频 | 一个没见过它的开发者照 README 5 分钟跑起来 |
 | M5 验证 | 发 Hacker News、X、Reddit、V2EX；你自己的下一个项目基于它来做 | 发布后 4 周内有没有别人用它做的 app |
 
 ---
+
+## 10.1 给开发者的提醒（M3 实测发现）
+
+- **agent 的工作目录放在哪，会影响 agent 的记忆。** Claude Code 按 git 仓库划分自己的长期记忆。示例 app 的工作目录在 skillframe 仓库里面，所以示例里的 Claude Code 和在 skillframe 仓库里干活的 Claude Code 共用同一份记忆：M3 实测时让它"记住一个词"，它把这个词写进了 skillframe 项目的记忆里（已删掉）。开发者应该把 `workspace` 放在给用户数据准备的目录里，不要放在自己 app 的源码仓库里面。
+- **"看起来登录了没有"只是猜测。** skillframe 只看各 agent 自己存登录信息的文件在不在（不读内容）。实测 Qwen Code 的设置文件存在，但其实没登录；这时 agent 自己报的错会显示在对话里，下面附上这个 agent 的登录方法。
 
 ## 11. 需要你决定的问题
 

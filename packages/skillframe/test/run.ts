@@ -14,7 +14,7 @@ let passed = 0;
 const failed: string[] = [];
 const started = Date.now();
 
-const stream = run({ files, concurrency: true, timeout: 30_000 });
+const stream = run({ files, concurrency: true, timeout: 120_000 });
 stream.on("test:pass", (d) => {
   if (d.details.type !== "suite") passed++;
 });

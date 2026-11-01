@@ -43,6 +43,17 @@ const STRINGS = {
     notInstalledShort: "{agent} (not installed)",
     signedOut: "{agent} doesn't look signed in on this computer. {login}",
     keepsAgent: "This chat stays with {agent}. Starting a new chat with {other}.",
+    attach: "Attach",
+    attachFiles: "Attach files",
+    remove: "Remove {name}",
+    mode: "Permission mode",
+    model: "Model",
+    asSetUp: "As set up",
+    defaultModel: "Default model",
+    tasks: "Tasks: {done} of {total} done",
+    fork: "Fork from here",
+    forkHint: "Start a new chat that goes on from this reply",
+    tooBig: "{name} is larger than 15 MB; attach a smaller file.",
   },
   zh: {
     newChat: "新对话",
@@ -76,6 +87,17 @@ const STRINGS = {
     notInstalledShort: "{agent}（未安装）",
     signedOut: "这台电脑上的 {agent} 看起来还没登录。{login}",
     keepsAgent: "这个对话会一直用 {agent}，已用 {other} 新开一个对话。",
+    attach: "附件",
+    attachFiles: "添加附件",
+    remove: "移除 {name}",
+    mode: "权限模式",
+    model: "模型",
+    asSetUp: "按本机设置",
+    defaultModel: "默认模型",
+    tasks: "任务：已完成 {done} / {total}",
+    fork: "从这里分叉",
+    forkHint: "新开一个对话，从这条回复接着往下",
+    tooBig: "{name} 超过 15 MB，请换一个小一点的文件。",
   },
 };
 
@@ -159,12 +181,32 @@ details.think .md { padding: 4px 0 0 12px; border-left: 1px solid var(--sf-line)
 .error { color: var(--sf-danger); overflow-wrap: anywhere; }
 
 .composer { border-top: 1px solid var(--sf-line); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
-.box { display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--sf-line); border-radius: 6px; padding: 6px 6px 6px 10px; }
+.box { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--sf-line); border-radius: 6px; padding: 6px 6px 6px 10px; min-width: 0; }
 .box:focus-within { border-color: var(--sf-accent); }
-.box textarea { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; max-height: 180px; padding: 3px 0; }
-.box button { border: 0; border-radius: 4px; padding: 4px 12px; background: var(--sf-accent); color: #fff; }
-.box button.stop { background: var(--sf-ink); color: var(--sf-soft); }
-.box button:disabled { opacity: .4; cursor: default; }
+.box textarea { min-width: 0; border: 0; outline: 0; resize: none; background: transparent; max-height: 180px; padding: 3px 0; }
+.tools { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pickers { flex: 1; display: flex; gap: 4px; min-width: 0; }
+.pickers select { min-width: 0; max-width: 50%; border: 1px solid transparent; background: transparent; color: var(--sf-muted); border-radius: 4px; padding: 2px 2px; font-size: 12px; text-overflow: ellipsis; }
+.pickers select:hover { border-color: var(--sf-line); color: var(--sf-ink); }
+button.link { border: 0; background: none; padding: 2px 4px; color: var(--sf-muted); font-size: 12px; border-radius: 4px; flex: none; }
+button.link:hover { color: var(--sf-ink); background: var(--sf-soft); }
+.send { flex: none; border: 0; border-radius: 4px; padding: 4px 12px; background: var(--sf-accent); color: #fff; margin-left: auto; }
+.send.stop { background: var(--sf-ink); color: var(--sf-soft); }
+.send:disabled { opacity: .4; cursor: default; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.chips:empty { display: none; }
+.chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; font-size: 12px; background: var(--sf-soft); border-radius: 4px; padding: 1px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .x { border: 0; background: none; padding: 0 2px; color: var(--sf-muted); line-height: 1; }
+.user .chips { margin-top: 4px; }
+.tasks:empty { display: none; }
+.tasks summary { cursor: pointer; color: var(--sf-muted); font-size: 12px; }
+.tasks ul { margin: 4px 0 0; padding: 0 0 0 18px; max-height: 120px; overflow: auto; }
+.tasks li { overflow-wrap: anywhere; }
+.tasks li.completed { color: var(--sf-muted); text-decoration: line-through; }
+.tasks li.in_progress { font-weight: 600; }
+.acts { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.reply:hover .acts, .acts:focus-within { opacity: 1; }
+@media (hover: none) { .acts { opacity: 1; } }
 `;
 
 // ---- tiny helpers -----------------------------------------------------------
@@ -222,8 +264,21 @@ class SkillframeChat extends HTMLElement {
   constructor() {
     super();
     this.root = this.attachShadow({ mode: "open" });
-    this.state = { app: null, chats: [], running: new Set(), chatId: null, messages: [], live: null, error: "", screen: null };
+    this.state = { app: null, chats: [], running: new Set(), chatId: null, messages: [], live: null, error: "", screen: null, pending: [] };
+    this.options = new Map(); // agent id -> { modes, models } for the pickers
+    this.openSteps = new Set(); // tool steps the user opened: they stay open when the reply redraws
     this.waiters = new Map(); // chatId -> resolve() for ask()
+    this.ops = Promise.resolve(); // chat switches run one after another (see serial)
+  }
+
+  /**
+   * Run actions that change which chat is open one at a time, in the order they were asked for: a
+   * pick made while "New chat" is still being created must apply to the new chat, not the old one.
+   */
+  serial(fn) {
+    const run = this.ops.then(fn, fn);
+    this.ops = run.catch(() => {});
+    return run;
   }
 
   get endpoint() {
@@ -262,7 +317,11 @@ class SkillframeChat extends HTMLElement {
     return this.agent?.name || "Agent";
   }
 
-  async pickAgent(id) {
+  pickAgent(id) {
+    return this.serial(() => this.pickAgentNow(id));
+  }
+
+  async pickAgentNow(id) {
     try {
       localStorage.setItem("skillframe.agent", id);
     } catch {
@@ -311,7 +370,11 @@ class SkillframeChat extends HTMLElement {
     this.state.screen = screen;
   }
 
-  async newChat() {
+  newChat() {
+    return this.serial(() => this.newChatNow());
+  }
+
+  async newChatNow() {
     // the current chat hasn't started: it already is a new chat (no empty chats piling up)
     if (this.isFresh()) return this.state.meta;
     const chat = await this.api("POST", "/chats", { agent: this.pickedAgent });
@@ -406,6 +469,18 @@ class SkillframeChat extends HTMLElement {
       if (d.chat === this.state.chatId) this.open(d.chat, true);
       this.refreshChats().then(() => this.renderBar());
     });
+    on("chat.tasks", mine((d) => {
+      if (this.state.meta) this.state.meta.tasks = d.tasks;
+      this.renderExtras();
+    }));
+    on("chat.meta", mine((d) => {
+      this.state.meta = d.meta;
+      this.renderExtras();
+    }));
+    on("agent.info", (d) => {
+      this.options.set(d.agent, { modes: d.modes, models: d.models });
+      this.renderExtras();
+    });
     // a shared file changed (the agent edited it, or the app wrote it): the page redraws
     on("file.changed", (d) => this.dispatchEvent(new CustomEvent("file-changed", { detail: d })));
     // sf.publish(name, data) on the server: handed to the page as an "sf:<name>" event on this element
@@ -434,6 +509,67 @@ class SkillframeChat extends HTMLElement {
     this.render();
   }
 
+  /** the agent's modes and models, once per agent (ACP agents report theirs in their first chat) */
+  async loadOptions(agentId) {
+    if (!agentId || this.options.has(agentId)) return;
+    this.options.set(agentId, { modes: [], models: [] });
+    try {
+      this.options.set(agentId, await this.api("GET", `/agents/${agentId}/options`));
+    } catch {
+      this.options.delete(agentId);
+    }
+    this.renderExtras();
+  }
+
+  async changeSetting(change) {
+    try {
+      this.state.meta = await this.api("POST", `/chats/${this.state.chatId}/settings`, change);
+    } catch (e) {
+      this.state.error = e.message;
+      this.render();
+    }
+  }
+
+  fork(at) {
+    return this.serial(() => this.forkNow(at));
+  }
+
+  async forkNow(at) {
+    try {
+      const chat = await this.api("POST", `/chats/${this.state.chatId}/fork`, { at });
+      await this.refreshChats();
+      await this.open(chat.id);
+    } catch (e) {
+      this.state.error = e.message;
+      this.render();
+    }
+  }
+
+  // ---- attachments -------------------------------------------------------------
+  async attach(fileList) {
+    for (const file of fileList) {
+      if (file.size > 15 * 1024 * 1024) {
+        this.state.error = this.t("tooBig", { name: file.name });
+        this.render();
+        continue;
+      }
+      try {
+        if (!this.state.chatId) await this.newChat();
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+        const saved = await this.api("POST", `/chats/${this.state.chatId}/upload`, { name: file.name || "pasted.png", type: file.type, data });
+        this.state.pending.push(saved);
+      } catch (e) {
+        this.state.error = e.message;
+      }
+    }
+    this.render();
+  }
+
   async post(text, shown) {
     this.state.error = "";
     let echo = null;
@@ -442,12 +578,15 @@ class SkillframeChat extends HTMLElement {
       const running = this.state.running.has(this.state.chatId);
       if (!running) {
         // shown at once; chat.start would add it again
-        echo = { role: "user", text: shown ?? text, at: Date.now() / 1000 };
+        echo = { role: "user", text: shown ?? text, at: Date.now() / 1000, files: this.state.pending };
         this.state.messages.push(echo);
         this.pendingEcho = true;
         this.render();
       }
-      await this.api("POST", `/chats/${this.state.chatId}/send`, { text, shown, screen: this.state.screen });
+      const files = this.state.pending;
+      await this.api("POST", `/chats/${this.state.chatId}/send`, { text, shown, screen: this.state.screen, files });
+      this.state.pending = [];
+      this.renderExtras();
     } catch (e) {
       this.pendingEcho = false;
       this.state.messages = this.state.messages.filter((m) => m !== echo);
@@ -470,12 +609,13 @@ class SkillframeChat extends HTMLElement {
       this.log.append(h("div", { class: "empty", html: md(hint) }));
     }
     if (this.state.notice) this.log.prepend(h("div", { class: "note" }, this.state.notice));
-    for (const m of messages) this.log.append(m.role === "user" ? h("div", { class: "user" }, m.text) : this.renderReply(m));
+    const lastReply = messages.map((m) => m.role).lastIndexOf("assistant");
+    messages.forEach((m, i) => this.log.append(m.role === "user" ? this.renderUser(m) : this.renderReply(m, i, i === lastReply)));
     this.liveNode = h("div", { class: "reply" });
     this.log.append(this.liveNode);
     this.renderLive(true);
     if (error) this.log.append(h("div", { class: "error", html: md(error) }));
-    this.updateComposer();
+    this.renderExtras();
     this.scrollDown(true);
   }
 
@@ -493,10 +633,21 @@ class SkillframeChat extends HTMLElement {
     if (!skipScroll) this.scrollDown();
   }
 
-  renderReply(m) {
+  renderUser(m) {
+    const files = (m.files || []).map((f) => h("span", { class: "chip", title: f.name }, f.name));
+    return h("div", { class: "user" }, m.text, files.length ? h("div", { class: "chips" }, files) : null);
+  }
+
+  renderReply(m, index, last) {
     const node = h("div", { class: "reply" }, ...this.renderBlocks(m.blocks || []));
     if (m.cancelled) node.append(h("div", { class: "note" }, this.t("stopped")));
     if (m.error) node.append(h("div", { class: "error", html: md(m.error) }));
+    // an agent that isn't signed in says so in its own words: add how to sign in to it
+    if (m.error && /auth|log ?in|sign ?in|credential|api key/i.test(m.error) && this.agent?.login) node.append(h("div", { class: "note", html: md(this.agent.login) }));
+    // fork: a saved reply that marks a point in the session (the newest one always does)
+    if (index !== undefined && this.agent?.fork && !this.isBusy() && (m.point || last) && !m.error) {
+      node.append(h("div", { class: "acts" }, h("button", { class: "link", title: this.t("forkHint"), onclick: () => this.fork(index) }, this.t("fork"))));
+    }
     return node;
   }
 
@@ -520,12 +671,14 @@ class SkillframeChat extends HTMLElement {
 
   renderStep(b) {
     const name = String(b.name || "").replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
-    return h(
+    const el = h(
       "details",
-      { class: `step ${b.status}` },
+      { class: `step ${b.status}`, open: this.openSteps.has(b.id) },
       h("summary", {}, h("span", { class: "name" }, name), h("span", { class: "hint", title: b.hint }, b.hint)),
       b.result ? h("pre", {}, b.result) : null,
     );
+    el.addEventListener("toggle", () => (el.open ? this.openSteps.add(b.id) : this.openSteps.delete(b.id)));
+    return el;
   }
 
   renderAsk(b) {
@@ -635,8 +788,74 @@ class SkillframeChat extends HTMLElement {
         }
       },
     });
-    this.button = h("button", { onclick: () => (this.isBusy() && !this.input.value.trim() ? this.stop() : this.submit()) });
-    return h("div", { class: "composer" }, h("div", { class: "box" }, this.input, this.button));
+    this.input.addEventListener("paste", (e) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (files.length) {
+        e.preventDefault();
+        this.attach(files);
+      }
+    });
+    this.button = h("button", { class: "send", onclick: () => (this.isBusy() && !this.input.value.trim() ? this.stop() : this.submit()) });
+    const picker = h("input", { type: "file", multiple: true, hidden: true, onchange: (e) => {
+      this.attach([...e.target.files]);
+      e.target.value = "";
+    } });
+    this.tasksNode = h("div", { class: "tasks" });
+    this.chipsNode = h("div", { class: "chips" });
+    this.pickersNode = h("div", { class: "pickers" });
+    const tools = h("div", { class: "tools" },
+      h("button", { class: "link", title: this.t("attachFiles"), onclick: () => picker.click() }, this.t("attach")),
+      this.pickersNode,
+      this.button,
+      picker);
+    const composer = h("div", { class: "composer" }, this.tasksNode, h("div", { class: "box" }, this.chipsNode, this.input, tools));
+    // drop files anywhere on the sidebar
+    this.addEventListener("dragover", (e) => {
+      if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+    });
+    this.addEventListener("drop", (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      this.attach([...e.dataTransfer.files]);
+    });
+    return composer;
+  }
+
+  /** what sits around the message box: the task list, attachments waiting to go, the pickers */
+  renderExtras() {
+    if (!this.tasksNode) return;
+    const tasks = this.state.meta?.tasks ?? [];
+    if (tasks.length) {
+      const done = tasks.filter((t) => t.status === "completed").length;
+      const open = this.tasksOpen ?? true;
+      this.tasksNode.replaceChildren(h("details", { open, ontoggle: (e) => (this.tasksOpen = e.currentTarget.open) },
+        h("summary", {}, this.t("tasks", { done, total: tasks.length })),
+        h("ul", {}, tasks.map((t) => h("li", { class: t.status }, t.subject)))));
+    } else this.tasksNode.replaceChildren();
+
+    this.chipsNode.replaceChildren(...this.state.pending.map((f, i) =>
+      h("span", { class: "chip" }, f.name, h("button", { class: "x", "aria-label": this.t("remove", { name: f.name }), onclick: () => {
+        this.state.pending.splice(i, 1);
+        this.renderExtras();
+      } }, "×"))));
+
+    const meta = this.state.meta;
+    // however the chat came to be open (loaded, New chat, a pick, a fork), its agent's options get fetched
+    if (meta && !this.options.has(meta.agent)) this.loadOptions(meta.agent);
+    const opts = meta ? this.options.get(meta.agent) : null;
+    const pickers = [];
+    if (meta && opts?.modes?.length) {
+      pickers.push(h("select", { "aria-label": this.t("mode"), title: this.t("mode"), onchange: (e) => this.changeSetting({ mode: e.target.value }) },
+        h("option", { value: "", selected: !meta.mode }, this.t("asSetUp")),
+        opts.modes.map((m) => h("option", { value: m.id, selected: m.id === meta.mode, title: m.desc || undefined }, m.name))));
+    }
+    if (meta && opts?.models?.length) {
+      pickers.push(h("select", { "aria-label": this.t("model"), title: this.t("model"), onchange: (e) => this.changeSetting({ model: e.target.value }) },
+        h("option", { value: "", selected: !meta.model }, this.t("defaultModel")),
+        opts.models.map((m) => h("option", { value: m.id, selected: m.id === meta.model, title: m.desc || undefined }, m.name))));
+    }
+    this.pickersNode.replaceChildren(...pickers);
+    this.updateComposer();
   }
 
   isBusy() {
@@ -648,7 +867,7 @@ class SkillframeChat extends HTMLElement {
     this.input.placeholder = this.t("placeholder", { agent: this.agentName });
     const stop = this.isBusy() && !this.input.value.trim();
     this.button.textContent = stop ? this.t("stop") : this.t("send");
-    this.button.className = stop ? "stop" : "";
+    this.button.className = stop ? "send stop" : "send";
     this.button.disabled = !stop && !this.input.value.trim();
   }
 

@@ -1,19 +1,24 @@
 # skillframe
 
-Give your app a sidebar that runs **your users' own coding agent** (Claude Code or Codex today;
-more next), on **their own subscription**, wired both ways into your UI:
+Give your app a sidebar that runs **your users' own coding agent** (Claude Code, Codex, or any
+agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) such as Qwen Code), on
+**their own subscription**, wired both ways into your UI:
 
 - your page tells the agent what the user is looking at, and your own buttons can start a task;
 - the agent calls your app's abilities as tools (over MCP);
 - files you and the agent both edit are watched: when the agent changes one, your page hears it,
   and your own writes can't silently overwrite the agent's (they carry the version they were read at).
 
-Status: **M2**. See [docs/DESIGN.md](docs/DESIGN.md) for the plan.
+The sidebar has what users expect from these agents: streamed replies and tool steps, permission,
+question and plan cards, permission mode and model pickers, the agent's task list, attachments,
+stop, queued messages, and forking a chat from any reply.
+
+Status: **M3**. See [docs/DESIGN.md](docs/DESIGN.md) for the plan. No runtime dependencies.
 
 ## How it stays within the rules
 
-skillframe only starts the `claude` / `codex` command the user installed and signed in to
-themselves, unmodified. It never ships its own copy of an agent, never uses the Agent SDK, and never reads,
+skillframe only starts the `claude` / `codex` / ACP agent command the user installed and signed in
+to themselves, unmodified. It never ships its own copy of an agent, never uses the Agent SDK, and never reads,
 stores or forwards a sign-in. Anthropic's
 [Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) page allows an end
 user to sign in to the unmodified Claude Code binary with their own subscription; if you ship a
@@ -36,6 +41,10 @@ Open http://127.0.0.1:4317, and ask the agent to "add a note that says buy milk"
 `notes.json` directly: the list redraws either way.
 
 ## Use it in your app
+
+Put `workspace` in a folder for your users' data, not inside your app's own source repository:
+Claude Code keeps its memory per git repository, so an agent working inside your repo shares
+memory with whoever develops it.
 
 ```ts
 import { createSkillframe } from "skillframe";
@@ -95,7 +104,9 @@ sf.setOrigin("http://127.0.0.1:3000"); // so the agent can reach your tools
 npm test
 ```
 
-Runs every test against a fake Claude Code (stream-json) and a fake Codex (app-server JSON-RPC)
-that speak the same protocols as the real ones, so tests cost no tokens. Prints one summary line, and the failures in full.
+Runs every test against a fake Claude Code (stream-json), a fake Codex (app-server JSON-RPC) and a
+fake ACP agent that speak the same protocols as the real ones, so tests cost no tokens. The sidebar
+tests drive the Chrome or Edge already on the machine (headless) through `playwright-core`; with
+neither installed, they are skipped with that reason. Prints one summary line, and the failures in full.
 
 License: MIT.

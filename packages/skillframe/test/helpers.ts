@@ -7,6 +7,7 @@ import type { Skillframe } from "../src/index.js";
 export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const FAKE_CLAUDE = path.join(PKG, "test/fixtures/fake-claude.mjs");
 export const FAKE_CODEX = path.join(PKG, "test/fixtures/fake-codex.mjs");
+export const FAKE_ACP = path.join(PKG, "test/fixtures/fake-acp.mjs");
 export const TMP = path.join(PKG, ".cache/test");
 
 /** both agents replaced by their fakes */
@@ -14,6 +15,7 @@ export const fakeEnv = (): NodeJS.ProcessEnv => ({
   ...process.env,
   SKILLFRAME_CLAUDE_CMD: JSON.stringify([process.execPath, FAKE_CLAUDE]),
   SKILLFRAME_CODEX_CMD: JSON.stringify([process.execPath, FAKE_CODEX]),
+  SKILLFRAME_QWEN_CMD: JSON.stringify([process.execPath, FAKE_ACP]),
 });
 
 export function tmpDir(name: string): string {

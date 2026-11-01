@@ -1,11 +1,13 @@
 // One agent protocol. ChatRunner owns the process, the transcript, the queue and the events;
 // a driver says how to start the agent and turns its output into blocks.
 import type { ChatRunner, Turn } from "../chat/runner.js";
-import type { AskBlock, ChatMeta, Decision } from "../chat/types.js";
+import type { AskBlock, Attachment, ChatMeta, Decision } from "../chat/types.js";
 
 export interface TurnSpec {
   chat: ChatMeta;
   prompt: string;
+  /** images attached to the first message */
+  images: Attachment[];
   /** what the user is looking at in the host app, for the agent's system prompt */
   context: string;
   addDirs: string[];
@@ -37,7 +39,9 @@ export interface Driver {
   /** right after the process starts: send the first message */
   begin(turn: Turn, spec: TurnSpec): void;
   /** a queued message into the running process */
-  send(turn: Turn, prompt: string): boolean;
+  send(turn: Turn, prompt: string, images: Attachment[]): boolean;
+  /** a picker changed while a reply runs: apply it now if the protocol can */
+  setLive?(turn: Turn, change: { model?: string; mode?: string }): void;
   /** one line of output; a ReplyEnd when a reply is over */
   handle(runner: ChatRunner, turn: Turn, msg: Record<string, unknown>): ReplyEnd | null;
   /** write the user's answer to a card and set its status; returns a new permission mode, if any */

@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { listAgents } from "./agents.js";
-import { ChatRunner } from "./chat/runner.js";
+import { Busy, ChatRunner, NotFound } from "./chat/runner.js";
 import { ChatStore } from "./chat/store.js";
 import { EventBus, type Listener } from "./events.js";
 import { createHandler, serveFile } from "./http.js";
@@ -16,7 +16,10 @@ import { FileChannel } from "./files.js";
 
 export type { ToolSpec, ToolContext, ToolInput } from "./mcp.js";
 export { Conflict, type FileVersion } from "./files.js";
-export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision } from "./chat/types.js";
+export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision, Attachment, Task } from "./chat/types.js";
+import type { Attachment, ChatMeta } from "./chat/types.js";
+import { AGENTS, agentCommand, agentDef } from "./agents.js";
+import { codexModels } from "./drivers/codex.js";
 
 export interface ContextInfo {
   chatId: string;
@@ -31,7 +34,7 @@ export interface SkillframeOptions {
   workspace: string;
   /** where chats and run files go: a folder of your app's own */
   dataDir: string;
-  /** agents the sidebar offers, first is the default (default: ["claude", "codex"]) */
+  /** agents the sidebar offers, first is the default (default: every agent skillframe knows; ones not installed show as such) */
   agents?: string[];
   /** files in the workspace you and the agent both edit ("notes.json", "data/**\/*.md"): the page hears when they change */
   watch?: string[];
@@ -56,6 +59,7 @@ export interface SendInput {
   shown?: string;
   screen?: unknown;
   addDirs?: string[];
+  files?: Attachment[];
   onDone?: (ok: boolean) => void;
 }
 
@@ -78,6 +82,10 @@ export interface Core {
   files?: FileChannel;
   appInfo(): unknown;
   send(chatId: string, input: SendInput): Promise<{ queued: boolean; id?: string }>;
+  /** the modes and models an agent offers, for the sidebar's pickers */
+  agentOptions(agentId: string): Promise<{ modes: { id: string; name: string; desc?: string }[]; models: { id: string; name: string; desc?: string }[] }>;
+  /** a new chat that goes on from reply number `at` (an index into the messages) of another */
+  fork(chatId: string, at: number): ChatMeta;
 }
 
 /** your own requests, before the static folder: answer and return true, or return false */
@@ -103,7 +111,7 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
   const runDir = path.join(dataDir, "run");
   const workspace = path.resolve(o.workspace);
   mkdirSync(workspace, { recursive: true });
-  const agentIds = o.agents?.length ? o.agents : ["claude", "codex"];
+  const agentIds = o.agents?.length ? o.agents : AGENTS.map((a) => a.id);
   const bus = new EventBus();
   const store = new ChatStore(path.join(dataDir, "chats"));
   let origin = ""; // http://127.0.0.1:<port>, known once a server listens
@@ -132,6 +140,8 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
     : undefined;
   files?.start();
 
+  let codexModelsCache: Promise<{ id: string; name: string; desc?: string }[]> | undefined;
+
   const core: Core = {
     basePath,
     allowedHosts: (o.allowedHosts ?? ["localhost", "127.0.0.1", "[::1]"]).map((h) => h.toLowerCase()),
@@ -158,8 +168,43 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
         shown: input.shown,
         context: parts.filter(Boolean).join("\n") + "\n",
         addDirs: input.addDirs,
+        files: input.files,
         onDone: input.onDone,
       });
+    },
+    async agentOptions(agentId) {
+      const def = AGENTS.find((a) => a.id === agentId && agentIds.includes(a.id));
+      if (!def) throw new NotFound(`Unknown agent ${agentId}`);
+      const learned = runner.learned.get(def.id);
+      let models = learned?.models.length ? learned.models : def.models;
+      if (def.protocol === "codex" && !models.length) {
+        const cmd = agentCommand(def, o.env);
+        models = cmd ? await (codexModelsCache ??= codexModels(cmd, o.env ?? process.env)) : [];
+        if (!models.length) codexModelsCache = undefined; // try again next time
+      }
+      return { modes: learned?.modes.length ? learned.modes : def.modes, models };
+    },
+    fork(chatId, at) {
+      const meta = store.meta(chatId);
+      if (!meta) throw new NotFound("Chat not found");
+      if (!agentDef(meta.agent).fork) throw new Busy(`${agentDef(meta.agent).name} can't branch a conversation`);
+      const messages = store.messages(chatId);
+      const reply = messages[at];
+      if (!reply || reply.role !== "assistant") throw new Busy("Pick one of the agent's replies to fork from");
+      const sessionId = meta.sessionId ?? meta.fork?.sessionId;
+      if (!sessionId) throw new Busy("This chat has no session to fork yet");
+      // the newest reply needs no point: the fork takes the whole session
+      const last = messages.slice(at + 1).every((m) => m.role !== "assistant");
+      if (!last && !reply.point) throw new Busy("This reply can't be forked from (it was saved before forking was possible)");
+      const chat = store.create({
+        title: `${meta.title || "Chat"} (fork)`,
+        agent: meta.agent,
+        mode: meta.mode,
+        model: meta.model,
+        fork: { sessionId, ...(last ? {} : { at: reply.point }) },
+      });
+      for (const m of messages.slice(0, at + 1)) store.append(chat.id, m);
+      return chat;
     },
   };
   const handler = createHandler(core);

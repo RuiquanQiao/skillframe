@@ -9,8 +9,27 @@ export interface ChatMeta {
   sessionId?: string;
   model?: string;
   mode?: string;
+  /** the agent's task list as it last reported it */
+  tasks?: Task[];
+  /** set on a chat forked from another: its first reply branches that session at `at` */
+  fork?: { sessionId: string; at?: string };
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Task {
+  id: string;
+  subject: string;
+  status: "pending" | "in_progress" | "completed";
+}
+
+/** A file the user attached to a message (saved in the chat's own folder). */
+export interface Attachment {
+  name: string;
+  path: string;
+  image: boolean;
+  /** image/png etc. */
+  type: string;
 }
 
 export interface TextBlock {
@@ -52,6 +71,7 @@ export interface UserMessage {
   role: "user";
   text: string;
   at: number;
+  files?: Attachment[];
 }
 
 export interface AssistantMessage {
@@ -62,6 +82,8 @@ export interface AssistantMessage {
   cancelled?: boolean;
   cost?: number | null;
   took?: number;
+  /** where the agent's session stood after this reply (Claude Code: message uuid, Codex: turn id): a fork point */
+  point?: string;
 }
 
 export type Message = UserMessage | AssistantMessage;
