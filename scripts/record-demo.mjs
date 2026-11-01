@@ -115,13 +115,26 @@ try {
   await hold(1.5);
   cut();
 
-  // 15–30 s: left side talks, right side changes
+  // 15–30 s: skillframe is only the sidebar; the rest starts empty, then an example app fills it
   await page.goto(url + "/");
   await sidebar.locator("textarea").waitFor();
   await page.locator("#todos li").first().waitFor();
-  await caption("The sidebar runs the agent already on the user's computer, signed in with their own plan.");
+  await page.evaluate(() => {
+    const r = document.querySelector("main").getBoundingClientRect();
+    const el = document.createElement("div");
+    el.id = "demo-empty";
+    el.style.cssText = `position:fixed;left:${r.left}px;top:0;right:0;bottom:0;background:#fff;z-index:8;padding:28px;box-sizing:border-box;transition:opacity .6s;pointer-events:none`;
+    el.innerHTML = `<div style="height:100%;border:2px dashed #b8bec6;border-radius:12px;display:grid;place-content:center;text-align:center;color:#69707a;font-family:'Segoe UI',system-ui,sans-serif">
+      <div style="font-size:34px;font-weight:600;color:#1c1f24">Your app goes here</div>
+      <div style="font-size:20px;margin-top:8px">Any web page: an editor, a canvas, a dashboard, a game…</div></div>`;
+    document.body.append(el);
+  });
+  await caption("skillframe is only the sidebar. The rest of the window is yours.");
   shot();
-  await hold(1.5);
+  await hold(3.5);
+  await page.evaluate(() => (document.getElementById("demo-empty").style.opacity = "0"));
+  await caption("For example, a todo app. The sidebar runs the user's own agent, on their own plan.");
+  await hold(2);
   await say("add todos for a trip to Tokyo: passport, yen, JR pass");
   shot(true);
   await todoCount(4);
@@ -263,9 +276,13 @@ await sf.listen();`;
       : str ? `<span style="color:#9fd18b">${m}</span>`
       : kw ? `<span style="color:#d6a8ff">${m}</span>`
       : `<b style="color:#ffd27a;font-weight:600">${m}</b>`);
-  return `<body style="margin:0;height:100vh;background:#1e1f22;color:#dfe1e5;display:grid;justify-content:center;align-content:start;padding-top:24px;box-sizing:border-box">
-<div><div style="font:600 18px ${FONT};color:#8a919c;margin-bottom:14px">server.js (shortened)</div>
-<pre style="margin:0;font:18px/1.45 Consolas,'Cascadia Mono',monospace">${html}</pre></div>
-<div style="position:fixed;left:0;right:0;bottom:20px;text-align:center"><span style="background:#fff;color:#000;font:600 24px/1.4 ${FONT};padding:8px 18px;border-radius:8px">Your app's abilities become the agent's tools.</span></div>
+  // an editor window on a plain backdrop: the developer's code, not part of the product's screen
+  return `<body style="margin:0;height:100vh;background:#e9ebee;display:grid;justify-content:center;align-content:start;padding-top:18px;box-sizing:border-box">
+<div style="background:#1e1f22;color:#dfe1e5;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden">
+<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#2b2d31;font:600 15px ${FONT};color:#a9b0ba">
+<span style="width:11px;height:11px;border-radius:50%;background:#ff5f57"></span><span style="width:11px;height:11px;border-radius:50%;background:#febc2e"></span><span style="width:11px;height:11px;border-radius:50%;background:#28c840"></span>
+<span style="margin-left:8px">server.js: your app's code (shortened)</span></div>
+<pre style="margin:0;padding:14px 26px 16px;font:16px/1.42 Consolas,'Cascadia Mono',monospace">${html}</pre></div>
+<div style="position:fixed;left:0;right:0;bottom:20px;text-align:center"><span style="background:#1c1f24;color:#fff;font:600 24px/1.4 ${FONT};padding:8px 18px;border-radius:8px">Your app's abilities become the agent's tools.</span></div>
 </body>`;
 }
