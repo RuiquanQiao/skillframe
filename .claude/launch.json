@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hello",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "hello"],
+      "port": 4317,
+      "autoPort": true
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+// skillframe: give your app a sidebar that runs your users' own coding agent on their own
+// subscription, wired both ways into your UI.
+//
+//   const sf = createSkillframe({ appName, workspace, dataDir, context, tools });
+//   await sf.listen();            // or: http.createServer(async (req, res) => { if (await sf.handler(req, res)) return; ... })
+import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import path from "node:path";
+import { listAgents } from "./agents.js";
+import { ChatRunner } from "./chat/runner.js";
+import { ChatStore } from "./chat/store.js";
+import { EventBus, type Listener } from "./events.js";
+import { createHandler, serveFile } from "./http.js";
+import { McpTools, type ToolSpec } from "./mcp.js";
+
+export type { ToolSpec, ToolContext, ToolInput } from "./mcp.js";
+export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision } from "./chat/types.js";
+
+export interface ContextInfo {
+  chatId: string;
+  /** whatever the page passed to `chat.setScreen(...)` */
+  screen: unknown;
+}
+
+export interface SkillframeOptions {
+  /** your app's name: told to the agent, and used for the tools' MCP server name */
+  appName: string;
+  /** the folder the agent works in (its cwd: its CLAUDE.md, skills and settings load from there) */
+  workspace: string;
+  /** where chats and run files go: a folder of your app's own */
+  dataDir: string;
+  /** agents the sidebar offers, first is the default (M1: "claude") */
+  agents?: string[];
+  /** called before each message: what the user is looking at, in words for the agent */
+  context?: (info: ContextInfo) => string | Promise<string>;
+  /** your app's abilities the agent may call (offered over MCP, pre-approved) */
+  tools?: Record<string, ToolSpec>;
+  /** where the routes live (default "/sf") */
+  basePath?: string;
+  /** a folder `listen()` serves at "/" (your page) */
+  static?: string;
+  /** Host header names accepted (default: loopback names only) */
+  allowedHosts?: string[];
+  /** more tools that never ask (Claude Code rules like "Bash(git status*)") */
+  allowedTools?: string[];
+  /** environment for the agent processes (default: process.env) */
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface SendInput {
+  text: string;
+  shown?: string;
+  screen?: unknown;
+  addDirs?: string[];
+  onDone?: (ok: boolean) => void;
+}
+
+// Pre-approved so ordinary looking around never stops for a card. Edits and commands are not
+// listed: the permission mode decides them, like in the terminal.
+const DEFAULT_ALLOWED = ["Read", "Glob", "Grep", "Skill", "WebFetch", "WebSearch"];
+
+function slug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "app";
+}
+
+export interface Core {
+  basePath: string;
+  allowedHosts: string[];
+  agentIds: string[];
+  bus: EventBus;
+  store: ChatStore;
+  runner: ChatRunner;
+  mcp?: McpTools;
+  appInfo(): unknown;
+  send(chatId: string, input: SendInput): Promise<{ queued: boolean; id?: string }>;
+}
+
+/** your own requests, before the static folder: answer and return true, or return false */
+export type Routes = (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>;
+
+export interface Skillframe extends Core {
+  /** answers the request if it is under basePath; resolves true when it did */
+  handler(req: IncomingMessage, res: ServerResponse): Promise<boolean>;
+  /** start a local server for your page and the sidebar */
+  listen(opts?: { port?: number; host?: string; routes?: Routes }): Promise<{ url: string; server: Server }>;
+  /** push an event of your own to every open page (the sidebar element fires it as "sf:<name>") */
+  publish(name: string, data: unknown): void;
+  /** when you mount `handler` in your own server: the origin the agent can reach it at (http://127.0.0.1:3000) */
+  setOrigin(url: string): void;
+  /** every event, in process (chat.delta, chat.done, …) */
+  on(fn: Listener): () => void;
+  close(): Promise<void>;
+}
+
+export function createSkillframe(o: SkillframeOptions): Skillframe {
+  const basePath = (o.basePath ?? "/sf").replace(/\/$/, "");
+  const dataDir = path.resolve(o.dataDir);
+  const runDir = path.join(dataDir, "run");
+  const workspace = path.resolve(o.workspace);
+  mkdirSync(workspace, { recursive: true });
+  const agentIds = o.agents?.length ? o.agents : ["claude"];
+  const bus = new EventBus();
+  const store = new ChatStore(path.join(dataDir, "chats"));
+  let origin = ""; // http://127.0.0.1:<port>, known once a server listens
+
+  const tools = o.tools && Object.keys(o.tools).length ? o.tools : undefined;
+  const mcp = tools
+    ? new McpTools(slug(o.appName), "0.0.1", tools, (name, args, ctx) => bus.publish("app.tool", { name, args, chat: ctx.chatId }))
+    : undefined;
+
+  const runner = new ChatRunner({
+    bus,
+    store,
+    cwd: workspace,
+    runDir,
+    env: o.env,
+    allowedTools: [...DEFAULT_ALLOWED, ...(mcp ? [mcp.allowRule] : []), ...(o.allowedTools ?? [])],
+    mcpConfig: (chatId) => {
+      if (!mcp) return undefined;
+      if (!origin) throw new Error("skillframe: the app's tools need a server; call listen() or setOrigin() first");
+      mkdirSync(runDir, { recursive: true });
+      const file = path.join(runDir, `${chatId}.mcp.json`);
+      writeFileSync(file, JSON.stringify(mcp.config(`${origin}${basePath}/mcp`, chatId), null, 1), "utf8");
+      return file;
+    },
+  });
+
+  const core: Core = {
+    basePath,
+    allowedHosts: (o.allowedHosts ?? ["localhost", "127.0.0.1", "[::1]"]).map((h) => h.toLowerCase()),
+    agentIds,
+    bus,
+    store,
+    runner,
+    mcp,
+    appInfo: () => ({
+      appName: o.appName,
+      agents: listAgents(agentIds, o.env),
+      tools: tools ? Object.entries(tools).map(([name, t]) => ({ name, description: t.description })) : [],
+    }),
+    async send(chatId, input) {
+      const parts = [
+        `You are running inside ${o.appName}: the user talks to you in its sidebar, next to the app itself.`,
+        mcp ? `${o.appName}'s own abilities are your tools from the "${mcp.name}" MCP server; use them to act in the app.` : "",
+      ];
+      if (o.context) parts.push((await o.context({ chatId, screen: input.screen })).trim());
+      return runner.send(chatId, {
+        text: input.text,
+        shown: input.shown,
+        context: parts.filter(Boolean).join("\n") + "\n",
+        addDirs: input.addDirs,
+        onDone: input.onDone,
+      });
+    },
+  };
+  const handler = createHandler(core);
+  const servers: Server[] = [];
+
+  return {
+    ...core,
+    handler,
+    publish: (name, data) => bus.publish("sf", { name, data }),
+    on: (fn) => bus.on(fn),
+    setOrigin: (url) => {
+      origin = url.replace(/\/$/, "");
+    },
+    async listen({ port = 0, host = "127.0.0.1", routes }: { port?: number; host?: string; routes?: Routes } = {}) {
+      const staticRoot = o.static ? path.resolve(o.static) : undefined;
+      const server = createServer(async (req, res) => {
+        if (await handler(req, res)) return;
+        if (routes && (await routes(req, res))) return;
+        const rel = decodeURIComponent(new URL(req.url ?? "/", "http://x").pathname);
+        if (req.method === "GET" && staticRoot && serveFile(staticRoot, rel, res)) return;
+        res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
+      });
+      await new Promise<void>((resolve) => server.listen(port, host, resolve));
+      const addr = server.address();
+      const p = typeof addr === "object" && addr ? addr.port : port;
+      origin = `http://${host}:${p}`;
+      servers.push(server);
+      return { url: origin + "/", server };
+    },
+    async close() {
+      runner.cancelAll();
+      bus.close();
+      await Promise.all(servers.map((s) => new Promise((r) => s.close(r))));
+    },
+  };
+}

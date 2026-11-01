@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>让 Skill 拥有 UI：调研报告</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f5f1;
+    --text: #1d1d1b;
+    --text-soft: #5b5a55;
+    --border: #e2e0d8;
+    --accent: #2f6fd6;
+    --accent-tint: rgba(47, 111, 214, 0.12);
+    --zone: #efeee9;
+    --code-bg: #f1efe8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg-soft: #262624;
+      --text: #f2f1ec;
+      --text-soft: #b4b2a9;
+      --border: #3a3936;
+      --accent: #7aa6ee;
+      --accent-tint: rgba(122, 166, 238, 0.16);
+      --zone: #2a2a27;
+      --code-bg: #2c2b28;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.7 -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1160px; margin: 0 auto; }
+  main { max-width: 860px; width: 100%; padding: 40px 32px 80px; }
+  h2, h3 { scroll-margin-top: 16px; }
+  aside.outline {
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; overflow-y: auto;
+    padding: 40px 12px 40px 16px;
+    border-right: 1px solid var(--border);
+    font-size: 14px; line-height: 1.45;
+  }
+  aside.outline .outline-title { font-weight: 600; color: var(--text-soft); font-size: 12px; letter-spacing: 0.05em; margin: 0 0 10px 10px; }
+  aside.outline ol { list-style: none; margin: 0; padding: 0; }
+  aside.outline li { margin: 0; }
+  aside.outline a {
+    display: block; padding: 5px 10px; border-radius: 6px;
+    color: var(--text-soft); text-decoration: none; border-left: 2px solid transparent;
+  }
+  aside.outline a:hover { background: var(--bg-soft); color: var(--text); }
+  aside.outline a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-tint); }
+  aside.outline ol ol a { padding-left: 24px; font-size: 13px; }
+  @media (max-width: 900px) {
+    .layout { display: block; }
+    aside.outline { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 16px; }
+    main { padding: 24px 16px 80px; }
+  }
+  h1 { font-size: 30px; line-height: 1.3; margin: 0 0 6px; }
+  h2 { font-size: 22px; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  .meta { color: var(--text-soft); font-size: 14px; margin-bottom: 24px; }
+  .lead { background: var(--bg-soft); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 4px; }
+  a { color: var(--accent); }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; font-family: Consolas, "Cascadia Code", monospace; }
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.55; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 600; white-space: nowrap; }
+  figure { margin: 20px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 13px; color: var(--text-soft); margin-top: 6px; }
+  .note { font-size: 14px; color: var(--text-soft); }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="outline">
+  <nav aria-label="大纲">
+    <div class="outline-title">大纲</div>
+    <ol>
+      <li><a href="#summary">结论速览</a></li>
+      <li><a href="#concepts">概念扫盲</a></li>
+      <li><a href="#landscape">已有方案</a>
+        <ol><li><a href="#landscape-table">全景对比</a></li></ol>
+      </li>
+      <li><a href="#subscription">借用户的订阅</a></li>
+      <li><a href="#feasibility">可行性</a>
+        <ol>
+          <li><a href="#gap">空位是什么</a></li>
+          <li><a href="#why">别人为什么会用</a></li>
+          <li><a href="#risks">风险</a></li>
+          <li><a href="#shortcut">今天就能试的捷径</a></li>
+        </ol>
+      </li>
+      <li><a href="#roadmap">建议路线</a>
+        <ol>
+          <li><a href="#stack">技术选型</a></li>
+          <li><a href="#phases">分阶段计划</a></li>
+          <li><a href="#gates">值不值得继续</a></li>
+        </ol>
+      </li>
+      <li><a href="#sources">参考来源</a></li>
+    </ol>
+  </nav>
+</aside>
+<main>
+
+<h1>让 Skill 拥有 UI：调研报告</h1>
+<div class="meta">2026-10-17 · 乔睿泉（Ruiquan Qiao）· 项目：skillframe</div>
+
+<!-- ================================================================ -->
+<h2 id="summary">结论速览</h2>
+
+<p class="lead"><strong>方向对，但你不是唯一想到的人：Anthropic 已经分两步做了一半，窗口期在收窄。值得做，前提是站在开放标准上、用具体的 UI skill 引流，而不是另起一套协议。</strong></p>
+
+<ul>
+  <li><strong>官方已有的两半</strong>：2026-01 的 MCP Apps 让任意 HTML UI 进入 Claude 和 ChatGPT 的聊天，但 Claude Code 不渲染。两周前（2026-10-01）的 Claude Code mods 让插件在 Claude Code 里画侧边面板，但只能用固定组件，没有 HTML 和图片。</li>
+  <li><strong>真实的空位</strong>：“任意 HTML 工作台 + 本地 coding agent 并排、双向联动 + 由 skill 自己携带”，目前没有通用开源方案。你的 Resume Studio 正好是这个形态的一个实例。</li>
+  <li><strong>“用户自带订阅”模式可行</strong>，前提是只启动用户自己登录的官方 <code>claude</code> / <code>codex</code> CLI，不碰凭证；产品名不能带 Claude。Anthropic 的相关政策今年变过至少三次。</li>
+  <li><strong>建议</strong>：先花 1 周验证“官方 app 已经够用”的两条捷径；不够用，再从 Resume Studio 抽出一个跨 Claude Code / Codex 的桌面宿主，UI 用 MCP Apps 这个开放格式，并用 2–3 个旗舰 UI skill 发布。</li>
+  <li><strong>成败指标</strong>：是否有别人写带 UI 的 skill，而不是 star 数。</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="concepts">概念扫盲：Skill、Plugin、MCP、Mod 分别是什么</h2>
+
+<p>一句话：<strong>Skill 是给 agent 读的说明书，MCP 是给 agent 用的工具，Plugin 是把它们打成一个包的安装单位，Mod 是 Claude Code 插件里唯一能在界面上画东西的部分。</strong>你说的“带 UI 的 skill”，在 Claude Code 体系里最接近“Skill + Mod（+ MCP）打成一个 Plugin”。</p>
+
+<div class="table-wrap"><table>
+  <tr><th>名称</th><th>本质</th><th>写什么</th><th>能改什么</th><th>能画 UI 吗</th></tr>
+  <tr><td><a href="https://code.claude.com/docs/en/skills">Skill</a></td><td>一个 <code>SKILL.md</code> 文件夹（可带脚本、模板），agent 需要时才读全文</td><td>Markdown</td><td>agent 知道什么、怎么做</td><td>否</td></tr>
+  <tr><td><a href="https://code.claude.com/docs/en/mcp">MCP server</a></td><td>独立进程或远程服务，给 agent 提供工具（tools）和数据</td><td>任何语言</td><td>agent 能调用哪些工具</td><td>在 claude.ai / Claude Desktop 聊天里可以，经由 MCP Apps 扩展</td></tr>
+  <tr><td>Subagent</td><td>一个独立上下文的“分身”，用来隔离长任务</td><td>Markdown 定义</td><td>任务拆分与上下文隔离</td><td>否</td></tr>
+  <tr><td>Settings hook</td><td>在生命周期事件（如每次改文件后）跑的 shell 命令或 HTTP 请求</td><td>脚本 + settings.json</td><td>拦截、放行、记录事件</td><td>否</td></tr>
+  <tr><td><a href="https://code.claude.com/docs/en/plugins/mods/overview">Mod</a></td><td>在 Claude Code 进程内运行的 JS/TS 事件处理函数</td><td>JavaScript / TypeScript</td><td>工具调用、提示词、命令、界面</td><td><strong>是</strong>：侧边面板、提示框上方横幅、状态栏、toast，还能改写 Claude Code 自己画的部分</td></tr>
+  <tr><td><a href="https://code.claude.com/docs/en/plugins">Plugin</a></td><td>一个目录 + <code>.claude-plugin/plugin.json</code> 清单，把上面任意几样打包</td><td>清单 JSON</td><td>安装、版本、分发</td><td>取决于里面有没有 Mod</td></tr>
+  <tr><td>Marketplace</td><td>一个列出插件及下载地址的 <code>marketplace.json</code>，通常是一个 GitHub 仓库</td><td>JSON</td><td>分发渠道</td><td>—</td></tr>
+</table></div>
+
+<p>三个容易混的点：</p>
+<ul>
+  <li><strong>Skill 本身已是开放标准</strong>（<a href="https://agentskills.io">agentskills.io</a>）。<code>SKILL.md</code> 格式被 Claude Code、Codex 等多个 agent 读取，所以“文档型 skill”天然跨工具；而 Mod 只在 Claude Code 里跑。</li>
+  <li><strong>Plugin 不是 MCP</strong>。Plugin 是打包格式，里面可以带 MCP server，也可以不带。Codex 也有自己的 plugins（2026-03），同样是 skill + MCP 的打包。</li>
+  <li><strong>装上的插件每轮都占上下文</strong>：每个 skill 的名字和描述常驻，全文按需加载；MCP 工具描述也会占 token。这限制了“一个超大全家桶插件”的做法。</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="landscape">已有的同类方案：官方已经做了两半</h2>
+
+<p><strong>你想要的“agent app 里有一块显示定制 UI 的区域”，Anthropic 已经分两条线做出来了，但两条线各缺一半。</strong>这是本报告最重要的发现。</p>
+
+<ul>
+  <li><strong>MCP Apps（2026-01-26 上线）</strong>：MCP server 可以返回一段完整的 HTML/JS，在 claude.ai、Claude Desktop 聊天、移动端、ChatGPT、VS Code、Goose 里以沙箱 iframe 渲染，支持内联卡片、轮播、全屏和画中画。UI 能回调 server 的工具。但官方文档明确写了：<strong>Claude Code 只把工具当文字调用，不渲染 UI</strong>。设计规范还要求“别做复杂多步工作流、别做深层导航”。它的定位是“对话里的小应用”，不是“与 agent 长期并排的工作台”。</li>
+  <li><strong>Claude Code mods（2026-10-01 随 v2.1.287 发布）</strong>：插件里的 JS/TS 可以在终端、桌面端 Code 标签页、VS Code 里画侧边面板和提示框上方横幅，还能用 <code>$.prompt.submit</code> 替用户发消息、拦截工具调用、读写文件。这几乎就是你说的“带 UI 的 skill”。但面板只能用一套固定组件拼：Box、Text、Button、Input、Select、Markdown、Code、Svg（最多 131,072 字符），<strong>没有 HTML/webview，桌面端也不支持 Image</strong>。自定义绘制的 <code>Client</code> 按字符格子坐标工作，不是 DOM。</li>
+</ul>
+
+<p>换句话说：<strong>“任意 HTML 的富 UI”和“跑在本地、能改文件的 agent”今天在官方产品里还没有放在同一个窗口里。</strong>简历实时 PDF 预览、拖拽画布、带浏览器的网申工作台，用 mods 做不出来；用 MCP Apps 可以做出来，但只能在聊天里用，进不了 Claude Code。这就是空位所在，也是风险所在：官方把两条线合并，只是时间问题。</p>
+
+<h3 id="landscape-table">全景对比</h3>
+<div class="table-wrap"><table>
+  <tr><th>方案</th><th>谁 / 何时</th><th>UI 在哪里</th><th>UI 技术</th><th>驱动本地 agent、改本地文件</th><th>与你设想的差距</th></tr>
+  <tr><td><a href="https://code.claude.com/docs/en/plugins/mods/overview">Claude Code mods</a></td><td>Anthropic，2026-10</td><td>Claude Code 侧边面板、横幅、状态栏</td><td>固定组件树 + SVG</td><td>是，就在 agent 进程内</td><td>最接近；缺 HTML、图片、PDF，仅 Claude Code</td></tr>
+  <tr><td><a href="https://claude.com/docs/connectors/building/mcp-apps/getting-started">MCP Apps</a></td><td>Anthropic + OpenAI + MCP-UI 社区，2026-01</td><td>聊天流里的卡片 / 全屏 / 画中画</td><td>任意 HTML，沙箱 iframe</td><td>本地 stdio server 可以，但 Claude Code 不渲染</td><td>富 UI 有了，缺“与 coding agent 并排”</td></tr>
+  <tr><td><a href="https://apps.extensions.modelcontextprotocol.io/api/index.html">OpenAI Apps SDK</a></td><td>OpenAI，2025-10</td><td>ChatGPT 对话</td><td>HTML，基于 MCP</td><td>否</td><td>已并入 MCP Apps 标准</td></tr>
+  <tr><td><a href="https://thenewstack.io/openais-codex-gets-plugins/">Codex plugins</a></td><td>OpenAI，2026-03</td><td>无独立 UI（未查到支持 MCP Apps 的证据）</td><td>—</td><td>是</td><td>只有 skill + MCP，没有 UI</td></tr>
+  <tr><td><a href="https://docs.openclaw.ai/platforms/mac/canvas">OpenClaw Canvas</a></td><td>OpenClaw 社区</td><td>macOS 伴随 app 的面板</td><td>WKWebView，HTML + A2UI</td><td>是，经 Gateway</td><td>形态接近，但绑定 OpenClaw 且仅 macOS</td></tr>
+  <tr><td><a href="https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/">A2UI</a> / <a href="https://copilotkit.ai/ag-ui-and-a2ui">AG-UI</a></td><td>Google / CopilotKit</td><td>由宿主 app 决定</td><td>声明式 JSON 组件 / 事件流协议</td><td>取决于宿主</td><td>是协议，不是产品</td></tr>
+  <tr><td><a href="https://www.morphllm.com/agent-client-protocol">ACP</a></td><td>Zed + JetBrains，2025-08 起</td><td>编辑器里的 agent 面板</td><td>各客户端自己画</td><td>是，Claude Code / Codex 经适配器接入</td><td>解决“把 agent 嵌进任意外壳”，不解决 skill 自带 UI</td></tr>
+  <tr><td><a href="https://github.com/winfunc/opcode">opcode</a>、<a href="https://github.com/siteboon/claudecodeui">CloudCLI</a>、<a href="https://github.com/OpenCoworkAI/open-cowork">Open Cowork</a></td><td>社区</td><td>独立桌面 / Web 外壳</td><td>各自实现</td><td>是，包一层 Claude Code</td><td>是“更好的通用 GUI”，不是“skill 的 UI 平台”</td></tr>
+  <tr><td><a href="https://github.com/santifer/career-ops">career-ops</a></td><td>个人开发者，2026-04</td><td>终端 TUI（Go）+ alpha Web UI</td><td>Bubble Tea</td><td>是，跑在 7 种 agent CLI 里</td><td>你要抽象的正是它自己重复造的部分</td></tr>
+  <tr><td>你的 Resume Studio</td><td>你</td><td>独立窗口，左 chat 右工作台</td><td>Web 技术窗口</td><td>是，<code>claude -p</code> stream-json 双向通道</td><td>已经是这个设想的一个实例</td></tr>
+</table></div>
+
+<p>没有找到一个“让任意 skill 声明一个 HTML 工作台、并与 Claude Code / Codex 会话双向联动”的通用开源基础设施。搜“skill + UI”出来的几乎都是教 agent 写前端的设计类 skill。</p>
+
+<!-- ================================================================ -->
+<h2 id="subscription">“借用户的订阅”：可以，但只有一种姿势是安全的</h2>
+
+<p><strong>安全姿势是：你的程序去启动用户本机上未经修改、由用户自己登录的 <code>claude</code> / <code>codex</code> 可执行文件，而不碰任何登录凭证。</strong>career-ops 和你的 Resume Studio 都是这个姿势。</p>
+
+<p>Anthropic 官方《<a href="https://code.claude.com/docs/en/legal-and-compliance">Legal and compliance</a>》页面当前写的是：</p>
+<ul>
+  <li><strong>允许</strong>：最终用户用自己的 Claude 订阅登录<strong>未经修改的 Claude Code 二进制</strong>，包括嵌在别人的产品里跑。</li>
+  <li><strong>不允许</strong>：第三方在自己的 app 里提供“Claude.ai 登录”；代替用户把请求走 Free / Pro / Max 凭证；收集、存储、中转 Claude.ai 的凭证或会话 token。</li>
+  <li><strong>用 Agent SDK 做产品的开发者</strong>：文档要求用 API key。</li>
+  <li><strong>命名</strong>：不能把 “Claude Code” 或 “Anthropic” 用在自己的产品名、logo 里，只能在文字里如实说“跑在 Claude Code 上”。</li>
+  <li>Anthropic 保留不经通知就执行这些限制的权利。</li>
+</ul>
+
+<p>但整个 2026 年这条政策反复变过，平台风险是真实的：</p>
+<div class="table-wrap"><table>
+  <tr><th>日期</th><th>变化</th></tr>
+  <tr><td>2026-10-07</td><td><a href="https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan">客服中心</a>：Max 和 Team 套餐附带每月 API 额度，可用于 Agent SDK、<code>claude -p</code>；Pro 不在其列。Agent SDK、<code>claude -p</code> 和第三方 app 仍可用订阅额度</td></tr>
+  <tr><td>2026-06-15</td><td>原定把 SDK 使用改成单独按 API 价计费的方案当天暂停，“nothing has changed”</td></tr>
+  <tr><td>2026-05-13</td><td>宣布解除 4 月的封禁，改为单独的 SDK 额度（据 <a href="https://www.betterclaw.io/blog/openclaw-anthropic-subscription-ban">BetterClaw 整理</a>）</td></tr>
+  <tr><td>2026-04-04</td><td>第三方工具（包括 OpenClaw）的 OAuth 访问被切断</td></tr>
+  <tr><td>2026-02-19</td><td>条款明确：订阅 OAuth token 只用于 Claude Code 和 Claude.ai（<a href="https://gigazine.net/gsc_news/en/20260220-anthropic-third-party-block/">GIGAZINE</a>）</td></tr>
+</table></div>
+
+<p>OpenAI 这边更开放：2026 年 9 月的 “Sign in with ChatGPT” 让 Plus / Pro 用户把自己的套餐额度授权给合作工具使用（<a href="https://thenewstack.io/sign-in-with-chatgpt/">The New Stack</a>），首批合作方据报包含 OpenCode、OpenClaw 等开源项目。</p>
+
+<p>对你的含义：</p>
+<ol>
+  <li>底层永远调用官方 CLI（<code>claude -p --input-format stream-json</code> 或 ACP 适配器），不自己实现 agent 循环，也不碰 token。</li>
+  <li>同时支持 Codex，把单一厂商的政策风险分散掉。</li>
+  <li>产品名里不要带 Claude。</li>
+</ol>
+
+<!-- ================================================================ -->
+<h2 id="feasibility">可行性：空位真实存在，但窗口期可能只有几个月</h2>
+
+<p><strong>技术上完全可行，你已经在 Resume Studio 里做出了原型；难点不在技术，而在“别人为什么用”和“官方会不会先做完”。</strong></p>
+
+<h3 id="gap">空位是什么</h3>
+<p>今天没有一个产品同时满足这四条：</p>
+<ol>
+  <li>UI 是任意 HTML（能显示 PDF、画布、复杂表单）；</li>
+  <li>与本地 coding agent 的会话长期并排，而不是聊天里一张一次性卡片；</li>
+  <li>UI 和 agent 双向联动：UI 能发消息给 agent，agent 改了文件 UI 自动刷新；</li>
+  <li>由 skill 自己声明和分发，用户装一个 skill 就得到一个工作台。</li>
+</ol>
+<p>mods 缺第 1 条，MCP Apps 缺第 2 条，GUI 外壳缺第 4 条，OpenClaw Canvas 绑定自家生态且仅 macOS。</p>
+
+<figure>
+<svg viewBox="0 0 760 476" role="img" aria-label="空位在右上角：富 UI 与本地 agent 并排" font-size="13" font-family="inherit">
+  <defs>
+    <marker id="pos-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" style="fill: var(--text-soft)"/>
+    </marker>
+  </defs>
+  <text x="24" y="30" font-size="15" font-weight="600" style="fill: var(--text)">空位在右上角：富 UI 与本地 agent 并排</text>
+  <text x="24" y="50" font-size="11.5" style="fill: var(--text-soft)">位置为定性判断，依据上文各方案的能力</text>
+  <rect x="420" y="70" width="300" height="180" style="fill: var(--zone)"/>
+  <line x1="420" y1="70" x2="420" y2="430" stroke-dasharray="4 4" style="stroke: var(--border)"/>
+  <line x1="120" y1="250" x2="720" y2="250" stroke-dasharray="4 4" style="stroke: var(--border)"/>
+  <path d="M120 430H720" fill="none" stroke-width="1.25" marker-end="url(#pos-arrow)" style="stroke: var(--text-soft)"/>
+  <path d="M120 430V70" fill="none" stroke-width="1.25" marker-end="url(#pos-arrow)" style="stroke: var(--text-soft)"/>
+  <text x="420" y="458" text-anchor="middle" font-size="11.5" style="fill: var(--text-soft)">UI 表达力：固定组件 → 任意 HTML</text>
+  <text x="100" y="250" text-anchor="middle" font-size="11.5" transform="rotate(-90 100 250)" style="fill: var(--text-soft)">与本地 agent：只在聊天里 → 并排、可改文件</text>
+  <text x="132" y="88" font-size="11.5" style="fill: var(--text-soft)">能改文件，但 UI 受限</text>
+  <text x="708" y="88" text-anchor="end" font-size="11.5" font-weight="600" style="fill: var(--text)">空位</text>
+  <text x="708" y="418" text-anchor="end" font-size="11.5" style="fill: var(--text-soft)">UI 丰富，但只在聊天里</text>
+
+  <circle cx="200" cy="130" r="5" style="fill: var(--text-soft)"/>
+  <text x="212" y="134" style="fill: var(--text)">Claude Code mods</text>
+  <text x="212" y="150" font-size="11.5" style="fill: var(--text-soft)">固定组件，无 HTML</text>
+
+  <circle cx="150" cy="210" r="5" style="fill: var(--text-soft)"/>
+  <text x="162" y="214" style="fill: var(--text)">纯文档 skill、Codex plugins</text>
+  <text x="162" y="230" font-size="11.5" style="fill: var(--text-soft)">没有自己的 UI</text>
+
+  <circle cx="520" cy="112" r="5" style="fill: var(--text-soft)"/>
+  <text x="532" y="116" style="fill: var(--text)">Resume Studio</text>
+  <text x="532" y="132" font-size="11.5" style="fill: var(--text-soft)">单个 skill 自建窗口</text>
+
+  <circle cx="470" cy="216" r="5" style="fill: var(--text-soft)"/>
+  <text x="482" y="220" style="fill: var(--text)">OpenClaw Canvas</text>
+  <text x="482" y="236" font-size="11.5" style="fill: var(--text-soft)">仅 macOS，绑定 OpenClaw</text>
+
+  <circle cx="660" cy="166" r="9" stroke-width="2" style="fill: var(--accent-tint); stroke: var(--accent)"/>
+  <text x="646" y="170" text-anchor="end" font-weight="600" style="fill: var(--text)">目标：skillframe</text>
+  <text x="646" y="186" text-anchor="end" font-size="11.5" style="fill: var(--text-soft)">跨 agent，由 skill 携带</text>
+
+  <circle cx="620" cy="350" r="5" style="fill: var(--text-soft)"/>
+  <text x="608" y="354" text-anchor="end" style="fill: var(--text)">MCP Apps</text>
+  <text x="608" y="370" text-anchor="end" font-size="11.5" style="fill: var(--text-soft)">Claude Code 里不渲染</text>
+</svg>
+<figcaption>定位图 · UI 表达力 × 与本地 agent 的距离。右上角只有各自为政的实现（Resume Studio、OpenClaw Canvas），还没有让任意 skill 都能进来的公共宿主。</figcaption>
+</figure>
+
+<h3 id="why">别人为什么会用</h3>
+<ul>
+  <li><strong>skill 作者</strong>：不用像你一样自己重写一遍聊天框、权限卡片、AskUserQuestion、中断、上传文件。你在 Resume Studio 里踩过的坑（“尽可能移植但总有疏漏”）就是卖点。</li>
+  <li><strong>终端用户</strong>：不会因为“基础设施”而来，只会因为某个具体的好用 skill 而来。career-ops（75.3k star）和 OpenClaw（392k star）红的都是具体价值，不是架构。</li>
+  <li><strong>结论</strong>：基础设施很少靠自己走红。先用一两个杀手级 UI skill 引流，框架作为“你也能这样做”的第二层。</li>
+</ul>
+
+<h3 id="risks">风险</h3>
+<div class="table-wrap"><table>
+  <tr><th>风险</th><th>为什么</th><th>应对</th></tr>
+  <tr><td>官方补齐</td><td>mods 两周前刚发布，已经有 <code>Svg</code> 和 <code>Client</code>；给面板加 HTML，或让 Code 标签页渲染 MCP Apps，都是顺理成章的下一步</td><td>UI 直接用 MCP Apps 这个开放格式写；官方补齐时，你生态里的 skill 自动在官方宿主里也能跑，你的价值转向跨 agent 和开发工具</td></tr>
+  <tr><td>订阅政策</td><td>Anthropic 2026 年内改了至少三次</td><td>只调用官方 CLI，同时支持 Codex</td></tr>
+  <tr><td>冷启动</td><td>没有 skill 就没有用户，没有用户就没有作者</td><td>自己先产出 2–3 个旗舰 UI skill；把现有热门 skill（如 career-ops）做成 UI 适配示例</td></tr>
+  <tr><td>安全</td><td>带 UI 的 skill 就是在用户机器上跑的第三方代码</td><td>UI 放沙箱 iframe，文件读写走显式权限，安装前列出能力清单（参考 <code>claude plugin validate</code>）</td></tr>
+  <tr><td>维护量</td><td>要跟进 Claude Code 和 Codex 两套 CLI 协议的变化</td><td>优先对接 ACP 这类已有适配层，而不是各自的私有流格式</td></tr>
+</table></div>
+
+<h3 id="shortcut">一条今天就能试的捷径</h3>
+<p>Claude Desktop 的 Code 标签页自带浏览器面板，能在对话旁打开 localhost 页面；mods 又能启动进程、发 HTTP 请求、用 <code>$.prompt.submit</code> 往会话里发消息。理论上，“skill 启动本地 UI 服务 + 浏览器面板显示 + 一个 mod 做桥”就能在官方 app 里实现“左 chat 右工作台”，不用自己重写聊天窗。<span class="note">这条路没有实测，建议作为第一个验证实验。注意它只在 Claude Desktop 里成立，属于绑定单一生态的方案，只适合作为验证，不适合作为最终形态。</span></p>
+
+<!-- ================================================================ -->
+<h2 id="roadmap">建议路线：不发明新协议，做“在本地 agent 旁边跑 MCP Apps 的宿主”</h2>
+
+<p><strong>建议定位：一个开源桌面宿主，左边是用户自己的 Claude Code 或 Codex 会话，右边渲染 skill 自带的 MCP Apps 格式 UI，两边通过工作区文件和消息双向联动。</strong>项目名 <code>skillframe</code> 可以用，它不含 Claude 字样。</p>
+
+<h3 id="stack">技术选型</h3>
+<div class="table-wrap"><table>
+  <tr><th>层</th><th>建议</th><th>理由</th></tr>
+  <tr><td>UI 格式</td><td><a href="https://github.com/modelcontextprotocol/ext-apps">MCP Apps</a>（<code>ui://</code> 资源 + 沙箱 iframe）</td><td>开放标准，Anthropic、OpenAI 都支持；SDK 自带给宿主用的 <code>app-bridge</code> 模块和 <code>basic-host</code> 示例；官方宿主补齐时 skill 不用重写</td></tr>
+  <tr><td>接 agent</td><td>直接启动官方 CLI：<code>claude -p</code> stream-json（你已实现）、Codex app-server；评估 ACP 适配器</td><td>合规姿势最稳；ACP 能一次接入多个 agent，但 Claude 适配器基于 Agent SDK，订阅政策上比直接调 CLI 更灰</td></tr>
+  <tr><td>skill 声明</td><td>在 skill 文件夹里加一个 <code>ui/</code> 目录和清单，不改 <code>SKILL.md</code> 标准</td><td>不装宿主时 skill 照常工作，降级优雅</td></tr>
+  <tr><td>桌面壳</td><td>Tauri 或 Electron（你现在是 Python 窗口）</td><td>跨平台分发、自动更新更成熟</td></tr>
+  <tr><td>分发</td><td>GitHub + <code>npx</code> 初始化器；可选上架 Claude Code 插件 marketplace</td><td>与 career-ops 同款，安装门槛最低</td></tr>
+</table></div>
+
+<h3 id="phases">分阶段计划</h3>
+<ol>
+  <li><strong>验证（1 周）</strong>：做两个小实验。一是上一节的“浏览器面板 + mod 桥”；二是把 Resume Studio 的预览页做成 MCP App，在 Claude Desktop 聊天里用本地 stdio server 跑起来。两个都顺，说明官方已经够用，你应该做“在现有 agent app 里加 UI 的工具包”而不是新 app。</li>
+  <li><strong>抽取宿主（2–4 周）</strong>：从 Resume Studio 拆出通用部分：聊天面板（权限卡片、提问卡片、中断、附件）、文件监听刷新、“当前屏幕上是什么”的上下文注入（你用 <code>--append-system-prompt-file</code> 做的那套）。</li>
+  <li><strong>旗舰 skill（2–4 周）</strong>：Resume Studio 迁到新宿主；再给一个热门纯文档 skill（如 career-ops 的追踪表）做 UI，证明“给别人的 skill 加 UI”很容易。</li>
+  <li><strong>发布</strong>：一段 60 秒演示视频（同一个 skill，纯文字 vs 带 UI），发 Hacker News、X、Reddit、V2EX，并提 PR 到 awesome-skills 一类列表。</li>
+</ol>
+
+<h3 id="gates">怎么判断值不值得继续</h3>
+<ul>
+  <li>发布后 4 周内，有没有<strong>别人</strong>写的带 UI skill？这是“基础设施”是否成立的唯一硬指标，star 数只是关注度。</li>
+  <li>如果只有你自己的 skill 在用，就把精力收回到 Resume Studio 本身。它仍是一个好作品，也是求职时的代表项目。</li>
+  <li>一旦 Anthropic 宣布 mods 支持 HTML 或 Code 标签页渲染 MCP Apps，就把重心切到“跨 agent + 开发工具链”，不要硬拼宿主。</li>
+</ul>
+
+<!-- ================================================================ -->
+<h2 id="sources">参考来源</h2>
+
+<p>官方文档（已打开核对）：</p>
+<ul>
+  <li><a href="https://code.claude.com/docs/en/plugins">Claude Code — Plugins overview</a></li>
+  <li><a href="https://code.claude.com/docs/en/plugins/mods/overview">Claude Code — Mods overview</a></li>
+  <li><a href="https://code.claude.com/docs/en/plugins/mods/reference">Claude Code — Mods reference</a></li>
+  <li><a href="https://code.claude.com/docs/en/plugins/mods/interface">Claude Code — Draw in the interface with a mod</a></li>
+  <li><a href="https://github.com/anthropics/claude-code/blob/main/mods/types/claude-code.d.ts">Claude Code mods 类型声明 claude-code.d.ts</a></li>
+  <li><a href="https://code.claude.com/docs/en/legal-and-compliance">Claude Code — Legal and compliance</a></li>
+  <li><a href="https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan">Claude 客服中心 — Use the Claude Agent SDK with your Claude plan</a></li>
+  <li><a href="https://claude.com/docs/connectors/building/mcp-apps/getting-started">Claude — Get started with MCP Apps</a></li>
+  <li><a href="https://claude.com/docs/connectors/building/mcp-apps/quickstart">Claude — Add an interactive UI to your MCP server</a></li>
+  <li><a href="https://claude.com/docs/connectors/building/mcp-apps/design-guidelines">Claude — MCP Apps design guidelines</a></li>
+  <li><a href="https://apps.extensions.modelcontextprotocol.io/api/index.html">MCP Apps SDK API</a></li>
+  <li><a href="https://docs.openclaw.ai/platforms/mac/canvas">OpenClaw — macOS Canvas</a></li>
+</ul>
+
+<p>项目主页（已打开核对，star 数为 2026-10-17 页面显示）：</p>
+<ul>
+  <li><a href="https://github.com/santifer/career-ops">santifer/career-ops</a>：75.3k star</li>
+  <li><a href="https://github.com/openclaw/openclaw">openclaw/openclaw</a>：392.2k star</li>
+</ul>
+
+<p>第三方报道（仅用于时间线和背景，部分只看了搜索摘要，引用时请复核）：</p>
+<ul>
+  <li><a href="https://www.betterclaw.io/blog/openclaw-anthropic-subscription-ban">BetterClaw — OpenClaw Claude Ban 时间线</a></li>
+  <li><a href="https://gigazine.net/gsc_news/en/20260220-anthropic-third-party-block/">GIGAZINE — Anthropic officially bans third-party subscription authentication</a></li>
+  <li><a href="https://www.theregister.com/2026/01/26/claude_mcp_apps_arrives">The Register — Claude MCP Apps arrives</a></li>
+  <li><a href="https://workos.com/blog/2026-01-27-mcp-apps">WorkOS — MCP Apps</a></li>
+  <li><a href="https://dev.to/nakadadev/what-are-claude-code-mods-what-they-can-draw-and-where-they-run-in-the-desktop-app-58pc">DEV — What are Claude Code mods … in the desktop app</a></li>
+  <li><a href="https://thenewstack.io/openais-codex-gets-plugins/">The New Stack — OpenAI's Codex gets plugins</a></li>
+  <li><a href="https://thenewstack.io/sign-in-with-chatgpt/">The New Stack — Sign in with ChatGPT</a></li>
+  <li><a href="https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/">Google — Introducing A2UI</a></li>
+  <li><a href="https://copilotkit.ai/ag-ui-and-a2ui">CopilotKit — AG-UI and A2UI</a></li>
+  <li><a href="https://www.morphllm.com/agent-client-protocol">Morph — What Is the Agent Client Protocol</a></li>
+  <li><a href="https://github.com/winfunc/opcode">winfunc/opcode</a>、<a href="https://github.com/siteboon/claudecodeui">siteboon/claudecodeui</a>、<a href="https://github.com/OpenCoworkAI/open-cowork">OpenCoworkAI/open-cowork</a></li>
+</ul>
+
+</main>
+</div>
+<script>
+  // 滚动时高亮大纲里当前所在的小节
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('aside.outline a'));
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); });
+    function update() {
+      var current = 0;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i] && targets[i].getBoundingClientRect().top <= 80) current = i;
+      }
+      links.forEach(function (a, i) { a.classList.toggle('active', i === current); });
+    }
+    // 点击时直接滚动到目标，不依赖 #锚点跳转（在某些预览器里锚点不生效）
+    links.forEach(function (a, i) {
+      a.addEventListener('click', function (ev) {
+        if (!targets[i]) return;
+        ev.preventDefault();
+        targets[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try { history.replaceState(null, '', a.getAttribute('href')); } catch (e) {}
+      });
+    });
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+  })();
+</script>
+</body>
+</html>

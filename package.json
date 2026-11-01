@@ -1,0 +1,21 @@
+{
+  "name": "skillframe-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/skillframe examples/hello",
+    "test": "tsc -b packages/skillframe && node packages/skillframe/dist/test/run.js",
+    "hello": "tsc -b packages/skillframe examples/hello && node examples/hello/dist/server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hello Notes</title>
+  <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; background: Canvas; color: CanvasText; }
+    skillframe-chat { border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent); min-height: 0; }
+    main { padding: 24px 32px; overflow: auto; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    ul { list-style: none; padding: 0; margin: 0; max-width: 60ch; }
+    li { padding: 8px 10px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+    li:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
+    li[aria-selected="true"] { background: color-mix(in srgb, CanvasText 10%, transparent); }
+    button { margin-top: 16px; }
+    @media (max-width: 700px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } skillframe-chat { border-right: 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); } }
+  </style>
+</head>
+<body>
+  <skillframe-chat endpoint="/sf"></skillframe-chat>
+  <main>
+    <h1>Notes</h1>
+    <ul id="notes"></ul>
+    <button id="summarize">Summarize my notes</button>
+  </main>
+  <script type="module">
+    const chat = document.querySelector("skillframe-chat");
+    const list = document.getElementById("notes");
+    let selected = null;
+
+    function draw(notes) {
+      list.replaceChildren(...notes.map((n) => {
+        const li = document.createElement("li");
+        li.textContent = `#${n.id}  ${n.text}`;
+        li.setAttribute("aria-selected", String(n.id === selected));
+        li.onclick = () => { selected = n.id; chat.setScreen({ selected }); draw(notes); };
+        li.tabIndex = 0;
+        li.onkeydown = (e) => { if (e.key === "Enter") li.onclick(); };
+        return li;
+      }));
+    }
+
+    // the agent added a note through the app's tool: the server pushed the new list
+    chat.addEventListener("sf:notes", (e) => draw(e.detail));
+    fetch("/api/notes").then((r) => r.json()).then(draw);
+
+    // a button of the app's own that starts a turn
+    document.getElementById("summarize").onclick = () =>
+      chat.ask({ prompt: "Use list_notes, then summarize my notes in two sentences.", shown: "Summarize my notes" });
+  </script>
+</body>
+</html>
