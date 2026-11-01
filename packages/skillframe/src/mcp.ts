@@ -52,19 +52,6 @@ export class McpTools {
     return `mcp__${this.name}`;
   }
 
-  /** The `--mcp-config` content for a chat's agent. */
-  config(url: string, chatId: string): Record<string, unknown> {
-    return {
-      mcpServers: {
-        [this.name]: {
-          type: "http",
-          url,
-          headers: { Authorization: `Bearer ${this.token}`, "X-Skillframe-Chat": chatId },
-        },
-      },
-    };
-  }
-
   async handle(req: IncomingMessage, res: ServerResponse, body: string): Promise<void> {
     const send = (status: number, payload?: unknown) => {
       res.writeHead(status, payload === undefined ? {} : { "Content-Type": "application/json" });

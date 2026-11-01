@@ -9,11 +9,21 @@ export interface TurnSpec {
   /** what the user is looking at in the host app, for the agent's system prompt */
   context: string;
   addDirs: string[];
+  /** the agent's working folder */
+  cwd: string;
   /** where the driver may write per-turn files */
   runDir: string;
   allowedTools: string[];
-  /** an MCP config file with the host app's tools */
-  mcpConfig?: string;
+  /** the host app's tools, as an MCP server each driver hands its agent in that agent's own way */
+  mcp?: McpLink;
+}
+
+/** Where the host app's MCP server is, and the token only our agent processes get. */
+export interface McpLink {
+  name: string;
+  url: string;
+  token: string;
+  chatId: string;
 }
 
 export interface ReplyEnd {

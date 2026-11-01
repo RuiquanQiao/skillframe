@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -18,8 +18,6 @@ function tmpDir(name: string): string {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
-
-after(() => rmSync(TMP, { recursive: true, force: true }));
 
 // ---- a raw HTTP client: fetch() won't let a test set Host or Origin freely ----
 function request(url: string, method: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -119,6 +117,7 @@ describe("chatting with the agent (fake Claude Code)", () => {
     const dir = tmpDir("app");
     sf = createSkillframe({
       appName: "Test App",
+      agents: ["claude"],
       workspace: path.join(dir, "ws"),
       dataDir: path.join(dir, "data"),
       env: { ...process.env, SKILLFRAME_CLAUDE_CMD: JSON.stringify([process.execPath, FAKE]) },

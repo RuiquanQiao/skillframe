@@ -5,7 +5,7 @@ import { createInterface } from "node:readline";
 import { agentCommand, agentDef } from "../agents.js";
 import type { EventBus } from "../events.js";
 import { kill, start } from "../spawn.js";
-import type { Driver, TurnSpec } from "../drivers/driver.js";
+import type { Driver, McpLink, TurnSpec } from "../drivers/driver.js";
 import { driverFor } from "../drivers/index.js";
 import type { ChatStore } from "./store.js";
 import type { AskBlock, Block, Decision, Message, ToolBlock, UserMessage } from "./types.js";
@@ -23,6 +23,9 @@ export class Turn {
   readonly startedAt = now();
   proc?: ChildProcess;
   driver!: Driver;
+  runner!: ChatRunner;
+  /** the driver's own (thread / turn ids, RPC numbering…) */
+  state: Record<string, any> = {};
   cancelled = false;
   closed = false;
   blocks: Block[] = [];
@@ -72,8 +75,8 @@ export interface RunnerOptions {
   runDir: string;
   /** tools that never ask for permission (Claude Code's --allowedTools) */
   allowedTools: string[];
-  /** the MCP config file for a chat's replies, if the host app has tools */
-  mcpConfig?: (chatId: string) => string | undefined;
+  /** where the host app's tools are for a chat's agent, if it has tools */
+  mcp?: (chatId: string) => McpLink | undefined;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -119,15 +122,17 @@ export class ChatRunner {
 
     turn = new Turn(chatId, o.onDone);
     turn.driver = driverFor(def.id);
+    turn.runner = this;
     this.turns.set(chatId, turn);
     const spec: TurnSpec = {
       chat,
       prompt: o.text,
       context: o.context ?? "",
       addDirs: o.addDirs ?? [],
+      cwd: this.opts.cwd,
       runDir: this.opts.runDir,
       allowedTools: this.opts.allowedTools,
-      mcpConfig: this.opts.mcpConfig?.(chatId),
+      mcp: this.opts.mcp?.(chatId),
     };
     this.emit("chat.start", chatId, { message: msg, startedAt: turn.replyStartedAt });
     this.run(turn, cmd, spec, def.exe);
@@ -178,7 +183,11 @@ export class ChatRunner {
     try {
       proc = start(cmd, turn.driver.args(spec), {
         cwd: this.opts.cwd,
-        env: { ...(this.opts.env ?? process.env), SKILLFRAME_CHAT: turn.chatId },
+        env: {
+          ...(this.opts.env ?? process.env),
+          SKILLFRAME_CHAT: turn.chatId,
+          ...(spec.mcp ? { SKILLFRAME_MCP_TOKEN: spec.mcp.token } : {}),
+        },
         stdio: ["pipe", "pipe", "pipe"],
       });
     } catch (e) {

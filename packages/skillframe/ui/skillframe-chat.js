@@ -39,6 +39,10 @@ const STRINGS = {
     notInstalled: "{agent} isn't installed on this computer. Install it with `{install}`, then sign in: {login}",
     queued: "Queued, sent when the current reply ends",
     chats: "Chats",
+    agent: "Agent",
+    notInstalledShort: "{agent} (not installed)",
+    signedOut: "{agent} doesn't look signed in on this computer. {login}",
+    keepsAgent: "This chat stays with {agent}. Starting a new chat with {other}.",
   },
   zh: {
     newChat: "新对话",
@@ -68,6 +72,10 @@ const STRINGS = {
     notInstalled: "这台电脑没有安装 {agent}。先运行 `{install}` 安装，再登录：{login}",
     queued: "已排队，当前回复结束后发送",
     chats: "对话",
+    agent: "Agent",
+    notInstalledShort: "{agent}（未安装）",
+    signedOut: "这台电脑上的 {agent} 看起来还没登录。{login}",
+    keepsAgent: "这个对话会一直用 {agent}，已用 {other} 新开一个对话。",
   },
 };
 
@@ -98,6 +106,8 @@ button { cursor: pointer; }
 .bar select { flex: 1; min-width: 0; border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 3px 4px; text-overflow: ellipsis; }
 .bar select:hover { border-color: var(--sf-line); }
 .bar .agent { color: var(--sf-muted); white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.bar .pick { flex: none; color: var(--sf-muted); max-width: 140px; }
+.bar .pick:hover { color: var(--sf-ink); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sf-muted); flex: none; }
 .dot.busy { background: var(--sf-accent); animation: sf-pulse 1.4s ease-in-out infinite; }
 .dot.waiting { background: var(--sf-attention); }
@@ -226,8 +236,51 @@ class SkillframeChat extends HTMLElement {
     return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
   }
 
+  get agents() {
+    return this.state.app?.agents ?? [];
+  }
+
+  /** the agent new chats start on: the last one picked here, else the first installed one */
+  get pickedAgent() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem("skillframe.agent");
+    } catch {
+      /* storage blocked: fall back */
+    }
+    const usable = this.agents.filter((a) => a.installed);
+    return (usable.find((a) => a.id === saved) ?? usable[0] ?? this.agents[0])?.id;
+  }
+
+  /** the current chat's agent (a chat stays with the agent it started on) */
+  get agent() {
+    const id = this.state.meta?.agent ?? this.pickedAgent;
+    return this.agents.find((a) => a.id === id);
+  }
+
   get agentName() {
-    return this.state.app?.agents?.[0]?.name || "Agent";
+    return this.agent?.name || "Agent";
+  }
+
+  async pickAgent(id) {
+    try {
+      localStorage.setItem("skillframe.agent", id);
+    } catch {
+      /* not remembered: fine */
+    }
+    const { meta } = this.state;
+    if (this.isFresh()) {
+      this.state.meta = await this.api("POST", `/chats/${meta.id}/agent`, { agent: id });
+      await this.refreshChats();
+      this.render();
+    } else {
+      const from = this.agentName;
+      const chat = await this.api("POST", "/chats", { agent: id });
+      Object.assign(this.state, { chatId: chat.id, meta: chat, messages: [], live: null, error: "" });
+      await this.refreshChats();
+      this.state.notice = this.t("keepsAgent", { agent: from, other: this.agentName });
+      this.render();
+    }
   }
 
   async connectedCallback() {
@@ -238,6 +291,7 @@ class SkillframeChat extends HTMLElement {
     this.composer = this.buildComposer();
     this.root.append(this.bar, this.log, this.composer);
     this.listen();
+    this.render(); // the frame at once (header, composer); the data fills in below
     try {
       this.state.app = await this.api("GET", "/app");
       await this.refreshChats();
@@ -258,10 +312,21 @@ class SkillframeChat extends HTMLElement {
   }
 
   async newChat() {
-    const chat = await this.api("POST", "/chats", {});
+    // the current chat hasn't started: it already is a new chat (no empty chats piling up)
+    if (this.isFresh()) return this.state.meta;
+    const chat = await this.api("POST", "/chats", { agent: this.pickedAgent });
+    // switch at once, from the answer: a pick made right after must see this chat, not the last one
+    Object.assign(this.state, { chatId: chat.id, meta: chat, messages: [], live: null, notice: "", error: "" });
+    this.render();
     await this.refreshChats();
-    await this.open(chat.id);
+    this.renderBar();
     return chat;
+  }
+
+  /** the open chat has no messages yet (its agent can still change) */
+  isFresh() {
+    const { meta, messages, live, running } = this.state;
+    return !!meta && !meta.sessionId && !messages.length && !live && !running.has(meta.id);
   }
 
   /** A turn started by the host app's own button. Resolves when the reply is over. */
@@ -341,6 +406,8 @@ class SkillframeChat extends HTMLElement {
       if (d.chat === this.state.chatId) this.open(d.chat, true);
       this.refreshChats().then(() => this.renderBar());
     });
+    // a shared file changed (the agent edited it, or the app wrote it): the page redraws
+    on("file.changed", (d) => this.dispatchEvent(new CustomEvent("file-changed", { detail: d })));
     // sf.publish(name, data) on the server: handed to the page as an "sf:<name>" event on this element
     on("sf", (d) => this.dispatchEvent(new CustomEvent(`sf:${d.name}`, { detail: d.data })));
   }
@@ -359,7 +426,9 @@ class SkillframeChat extends HTMLElement {
   async open(chatId, quiet) {
     const r = await this.api("GET", `/chats/${chatId}`);
     this.state.chatId = chatId;
+    this.state.meta = r.meta;
     this.state.messages = r.messages;
+    if (!quiet) this.state.notice = "";
     this.state.live = r.live;
     if (!quiet) this.state.error = "";
     this.render();
@@ -393,9 +462,14 @@ class SkillframeChat extends HTMLElement {
     this.renderBar();
     this.log.replaceChildren();
     const { messages, error } = this.state;
-    if (!messages.length && !this.state.live) {
-      this.log.append(h("div", { class: "empty" }, this.t("empty", { agent: this.agentName, app: this.state.app?.appName || "this app" })));
+    if (!messages.length && !this.state.live && this.state.app) {
+      const a = this.agent;
+      const hint = a && !a.installed ? this.t("notInstalled", { agent: a.name, install: a.install, login: a.login })
+        : a && a.signedIn === false ? this.t("signedOut", { agent: a.name, login: a.login })
+        : this.t("empty", { agent: this.agentName, app: this.state.app?.appName || "this app" });
+      this.log.append(h("div", { class: "empty", html: md(hint) }));
     }
+    if (this.state.notice) this.log.prepend(h("div", { class: "note" }, this.state.notice));
     for (const m of messages) this.log.append(m.role === "user" ? h("div", { class: "user" }, m.text) : this.renderReply(m));
     this.liveNode = h("div", { class: "reply" });
     this.log.append(this.liveNode);
@@ -535,8 +609,18 @@ class SkillframeChat extends HTMLElement {
     const status = waiting ? this.t("waiting", { agent: this.agentName }) : busy ? this.t("working", { agent: this.agentName }) : "";
     this.bar.replaceChildren(
       chats.length ? select : h("span", { style: "flex:1" }),
-      h("span", { class: "agent", title: status }, h("span", { class: `dot ${waiting ? "waiting" : busy ? "busy" : ""}` }), this.agentName),
+      this.state.app ? h("span", { class: "agent", title: status }, h("span", { class: `dot ${waiting ? "waiting" : busy ? "busy" : ""}` }), this.agentPicker()) : null,
       h("button", { class: "ghost", onclick: () => this.newChat().catch((e) => { this.state.error = e.message; this.render(); }) }, this.t("newChat")),
+    );
+  }
+
+  agentPicker() {
+    if (this.agents.length < 2) return this.agentName;
+    const current = this.agent?.id;
+    return h(
+      "select",
+      { class: "pick", "aria-label": this.t("agent"), onchange: (e) => this.pickAgent(e.target.value).catch((err) => { this.state.error = err.message; this.render(); }) },
+      this.agents.map((a) => h("option", { value: a.id, selected: a.id === current, disabled: !a.installed }, a.installed ? a.name : this.t("notInstalledShort", { agent: a.name }))),
     );
   }
 

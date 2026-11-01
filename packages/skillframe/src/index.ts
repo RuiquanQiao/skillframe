@@ -3,7 +3,7 @@
 //
 //   const sf = createSkillframe({ appName, workspace, dataDir, context, tools });
 //   await sf.listen();            // or: http.createServer(async (req, res) => { if (await sf.handler(req, res)) return; ... })
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { listAgents } from "./agents.js";
@@ -12,8 +12,10 @@ import { ChatStore } from "./chat/store.js";
 import { EventBus, type Listener } from "./events.js";
 import { createHandler, serveFile } from "./http.js";
 import { McpTools, type ToolSpec } from "./mcp.js";
+import { FileChannel } from "./files.js";
 
 export type { ToolSpec, ToolContext, ToolInput } from "./mcp.js";
+export { Conflict, type FileVersion } from "./files.js";
 export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision } from "./chat/types.js";
 
 export interface ContextInfo {
@@ -29,8 +31,10 @@ export interface SkillframeOptions {
   workspace: string;
   /** where chats and run files go: a folder of your app's own */
   dataDir: string;
-  /** agents the sidebar offers, first is the default (M1: "claude") */
+  /** agents the sidebar offers, first is the default (default: ["claude", "codex"]) */
   agents?: string[];
+  /** files in the workspace you and the agent both edit ("notes.json", "data/**\/*.md"): the page hears when they change */
+  watch?: string[];
   /** called before each message: what the user is looking at, in words for the agent */
   context?: (info: ContextInfo) => string | Promise<string>;
   /** your app's abilities the agent may call (offered over MCP, pre-approved) */
@@ -71,6 +75,7 @@ export interface Core {
   store: ChatStore;
   runner: ChatRunner;
   mcp?: McpTools;
+  files?: FileChannel;
   appInfo(): unknown;
   send(chatId: string, input: SendInput): Promise<{ queued: boolean; id?: string }>;
 }
@@ -98,7 +103,7 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
   const runDir = path.join(dataDir, "run");
   const workspace = path.resolve(o.workspace);
   mkdirSync(workspace, { recursive: true });
-  const agentIds = o.agents?.length ? o.agents : ["claude"];
+  const agentIds = o.agents?.length ? o.agents : ["claude", "codex"];
   const bus = new EventBus();
   const store = new ChatStore(path.join(dataDir, "chats"));
   let origin = ""; // http://127.0.0.1:<port>, known once a server listens
@@ -115,15 +120,17 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
     runDir,
     env: o.env,
     allowedTools: [...DEFAULT_ALLOWED, ...(mcp ? [mcp.allowRule] : []), ...(o.allowedTools ?? [])],
-    mcpConfig: (chatId) => {
+    mcp: (chatId) => {
       if (!mcp) return undefined;
       if (!origin) throw new Error("skillframe: the app's tools need a server; call listen() or setOrigin() first");
-      mkdirSync(runDir, { recursive: true });
-      const file = path.join(runDir, `${chatId}.mcp.json`);
-      writeFileSync(file, JSON.stringify(mcp.config(`${origin}${basePath}/mcp`, chatId), null, 1), "utf8");
-      return file;
+      return { name: mcp.name, url: `${origin}${basePath}/mcp`, token: mcp.token, chatId };
     },
   });
+
+  const files = o.watch?.length
+    ? new FileChannel(workspace, o.watch, bus, path.join(dataDir, "history"), () => (runner.turns.size ? "agent" : "outside"))
+    : undefined;
+  files?.start();
 
   const core: Core = {
     basePath,
@@ -133,10 +140,12 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
     store,
     runner,
     mcp,
+    files,
     appInfo: () => ({
       appName: o.appName,
       agents: listAgents(agentIds, o.env),
       tools: tools ? Object.entries(tools).map(([name, t]) => ({ name, description: t.description })) : [],
+      watch: o.watch ?? [],
     }),
     async send(chatId, input) {
       const parts = [
@@ -182,6 +191,7 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
     },
     async close() {
       runner.cancelAll();
+      files?.stop();
       bus.close();
       await Promise.all(servers.map((s) => new Promise((r) => s.close(r))));
     },

@@ -12,10 +12,17 @@
     main { padding: 24px 32px; overflow: auto; }
     h1 { font-size: 20px; margin: 0 0 16px; }
     ul { list-style: none; padding: 0; margin: 0; max-width: 60ch; }
-    li { padding: 8px 10px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+    li { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; }
+    li span { flex: 1; min-width: 0; }
     li:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
     li[aria-selected="true"] { background: color-mix(in srgb, CanvasText 10%, transparent); }
-    button { margin-top: 16px; }
+    li button { visibility: hidden; }
+    li:hover button, li:focus-within button { visibility: visible; }
+    .flash { animation: flash 1.2s ease-out; }
+    @keyframes flash { from { background: color-mix(in srgb, Highlight 35%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+    #status { color: GrayText; font-size: 13px; min-height: 1.4em; margin: 12px 0 0; }
+    button { font: inherit; }
     @media (max-width: 700px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } skillframe-chat { border-right: 0; border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent); } }
   </style>
 </head>
@@ -24,28 +31,66 @@
   <main>
     <h1>Notes</h1>
     <ul id="notes"></ul>
+    <p id="status" role="status"></p>
     <button id="summarize">Summarize my notes</button>
   </main>
   <script type="module">
     const chat = document.querySelector("skillframe-chat");
     const list = document.getElementById("notes");
+    const status = document.getElementById("status");
     let selected = null;
+    let file = { text: "[]", hash: "" };   // notes.json as last read, with its version
 
-    function draw(notes) {
-      list.replaceChildren(...notes.map((n) => {
+    const notes = () => { try { return JSON.parse(file.text); } catch { return []; } };
+
+    async function load(flash) {
+      const before = new Set(notes().map((n) => n.id));
+      file = await (await fetch("/sf/files?path=notes.json")).json();
+      draw(flash ? (id) => !before.has(id) : () => false);
+    }
+
+    function draw(isNew) {
+      list.replaceChildren(...notes().map((n) => {
         const li = document.createElement("li");
-        li.textContent = `#${n.id}  ${n.text}`;
-        li.setAttribute("aria-selected", String(n.id === selected));
-        li.onclick = () => { selected = n.id; chat.setScreen({ selected }); draw(notes); };
         li.tabIndex = 0;
+        li.setAttribute("aria-selected", String(n.id === selected));
+        if (isNew(n.id)) li.classList.add("flash");
+        const text = document.createElement("span");
+        text.textContent = `#${n.id}  ${n.text}`;
+        const del = document.createElement("button");
+        del.textContent = "Delete";
+        del.onclick = (e) => { e.stopPropagation(); remove(n.id); };
+        li.append(text, del);
+        li.onclick = () => { selected = n.id; chat.setScreen({ selected }); draw(() => false); };
         li.onkeydown = (e) => { if (e.key === "Enter") li.onclick(); };
         return li;
       }));
     }
 
-    // the agent added a note through the app's tool: the server pushed the new list
-    chat.addEventListener("sf:notes", (e) => draw(e.detail));
-    fetch("/api/notes").then((r) => r.json()).then(draw);
+    // the page writes on top of the version it showed; if the agent changed the file since, the
+    // server answers 409 with the newer version instead of overwriting it
+    async function remove(id) {
+      const text = JSON.stringify(notes().filter((n) => n.id !== id), null, 2) + "\n";
+      const res = await fetch("/sf/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: "notes.json", text, baseHash: file.hash }),
+      });
+      if (res.status === 409) {
+        status.textContent = "The notes changed while you were looking. Showing the latest; delete again if you still want to.";
+        file = (await res.json()).current;
+        draw(() => false);
+        return;
+      }
+      status.textContent = "";
+      await load(false);
+    }
+
+    // the agent (or anything else) changed notes.json: redraw, flashing what is new
+    chat.addEventListener("file-changed", (e) => {
+      if (e.detail.path === "notes.json" && e.detail.hash !== file.hash) load(true);
+    });
+    load(false);
 
     // a button of the app's own that starts a turn
     document.getElementById("summarize").onclick = () =>

@@ -43,7 +43,14 @@ export class ClaudeDriver implements Driver {
       writeFileSync(file, spec.context, "utf8");
       args.push("--append-system-prompt-file", file);
     }
-    if (spec.mcpConfig) args.push("--mcp-config", spec.mcpConfig);
+    if (spec.mcp) {
+      const { name, url, token, chatId } = spec.mcp;
+      const config = { mcpServers: { [name]: { type: "http", url, headers: { Authorization: `Bearer ${token}`, "X-Skillframe-Chat": chatId } } } };
+      mkdirSync(spec.runDir, { recursive: true });
+      const file = path.join(spec.runDir, `${chat.id}.mcp.json`);
+      writeFileSync(file, JSON.stringify(config, null, 1), "utf8");
+      args.push("--mcp-config", file);
+    }
     for (const d of spec.addDirs) args.push("--add-dir", d);
     return args;
   }

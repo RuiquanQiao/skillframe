@@ -1,10 +1,13 @@
 // `npm test`: every test file, one summary line, and only the failures in full.
-import { readdirSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { run } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// the test files run side by side, so their scratch folders are cleared once, here, before any starts
+rmSync(path.resolve(here, "../../.cache/test"), { recursive: true, force: true });
+
 const files = readdirSync(here).filter((f) => f.endsWith(".test.js")).map((f) => path.join(here, f));
 
 let passed = 0;

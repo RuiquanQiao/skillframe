@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Core } from "./index.js";
 import { Busy, NotFound } from "./chat/runner.js";
+import { Conflict, OutsideWatch } from "./files.js";
 
 const UI_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../ui");
 const BODY_CAP = 5 * 1024 * 1024;
@@ -105,11 +106,16 @@ export function createHandler(core: Core) {
         }
       }
       const body = method === "POST" ? parseJson(await readBody(req)) : {};
-      const out = await route_(core, method, route, body, res);
+      const out = await route_(core, method, route, body, res, url.searchParams);
       if (out !== ANSWERED) json(res, 200, out);
     } catch (e) {
       if (res.headersSent) return true; // e.g. the event stream was already open
-      const status = e instanceof HttpError ? e.status : e instanceof NotFound ? 404 : e instanceof Busy ? 409 : 500;
+      if (e instanceof Conflict) {
+        json(res, 409, { error: e.message, conflict: true, current: e.current });
+        return true;
+      }
+      const status =
+        e instanceof HttpError ? e.status : e instanceof NotFound ? 404 : e instanceof Busy ? 409 : e instanceof OutsideWatch ? 403 : 500;
       json(res, status, { error: (e as Error).message });
     }
     return true;
@@ -130,7 +136,7 @@ function parseJson(text: string): Record<string, any> {
 /** returned by routes that wrote the response themselves (files, the event stream) */
 const ANSWERED = Symbol("answered");
 
-async function route_(core: Core, method: string, route: string, b: Record<string, any>, res: ServerResponse): Promise<unknown> {
+async function route_(core: Core, method: string, route: string, b: Record<string, any>, res: ServerResponse, query: URLSearchParams): Promise<unknown> {
   const { runner, store } = core;
   const m = route.match(/^\/chats\/([\w-]+)(\/[a-z]+)?$/);
   const id = m?.[1];
@@ -145,6 +151,15 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
     return ANSWERED;
   }
   if (method === "GET" && route === "/app") return core.appInfo();
+  if (route === "/files") {
+    if (!core.files) throw new HttpError(404, "This app shares no files with the agent");
+    if (method === "GET") return core.files.read(query.get("path") ?? "");
+    if (method === "POST") {
+      if (typeof b.path !== "string" || typeof b.text !== "string") throw new HttpError(400, "Send { path, text, baseHash? }");
+      const v = core.files.write(b.path, b.text, typeof b.baseHash === "string" ? { baseHash: b.baseHash } : {});
+      return { path: v.path, hash: v.hash };
+    }
+  }
   if (method === "GET" && route === "/chats") return { chats: store.list(), running: [...runner.turns.keys()] };
   if (method === "POST" && route === "/chats") {
     const agent = typeof b.agent === "string" && core.agentIds.includes(b.agent) ? b.agent : core.agentIds[0];
@@ -168,6 +183,14 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
   }
   if (id && action === "/answer" && method === "POST") {
     return { ok: true, ask: runner.answer(id, String(b.requestId ?? ""), b.decision ?? {}) };
+  }
+  if (id && action === "/agent" && method === "POST") {
+    const meta = store.meta(id);
+    if (!meta) throw new NotFound("Chat not found");
+    if (!core.agentIds.includes(b.agent)) throw new HttpError(400, `Unknown agent ${b.agent}`);
+    // a chat stays with the agent it started on: its history lives in that agent's session
+    if (meta.sessionId || store.messages(id).length) throw new HttpError(409, "This chat has started; start a new chat to use another agent");
+    return store.update(id, { agent: b.agent }, false);
   }
   if (id && action === "/cancel" && method === "POST") {
     runner.cancel(id);

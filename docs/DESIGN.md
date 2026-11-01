@@ -141,7 +141,8 @@ npm create skillframe@latest my-app
 - skillframe 改用 **MCP**（Model Context Protocol，Claude Code、Codex、Qwen Code 都支持的开放工具协议）：宿主 app 在 `tools` 里声明的每个工具，由 skillframe 包成一个本地 MCP server，启动 agent 时自动挂上（Claude Code 用 `--mcp-config`，Codex 用它的 `mcp_servers` 配置，ACP 在 `session/new` 里传 `mcpServers`），并且把这些工具预先加进允许列表，不用每次弹权限确认。
 - 用户自己配的其他 MCP server 照常保留，skillframe 只是额外加一个。
 - **待验证（里程碑 1）**：三种 agent 能不能统一挂 HTTP 形式的 MCP server。不能的话，就退回到"一个 stdio 小程序转发到本地 HTTP"的做法。
-  - 2026-11-01 已验证 Claude Code 2.1.288：用 `--mcp-config` 挂 HTTP 形式的 MCP server 可行，真实的 Claude Code 调用了示例 app 的 `add_note` 和 `list_notes`。Codex、ACP 留到 M2、M3 验证。
+  - 2026-11-01 已验证 Claude Code 2.1.288：用 `--mcp-config` 挂 HTTP 形式的 MCP server 可行，真实的 Claude Code 调用了示例 app 的 `add_note` 和 `list_notes`。
+  - 2026-11-01 已验证 Codex 0.165.0：启动 `codex app-server` 时用 `-c mcp_servers.<名字>.url=...` 挂同一个 HTTP MCP server，令牌通过环境变量 `SKILLFRAME_MCP_TOKEN` 传入（`bearer_token_env_var`），不出现在命令行里，用户的 `~/.codex/config.toml` 不受影响。真实的 Codex 调用了 `add_note`。Codex 调用 MCP 工具前会发一个 `mcpServer/elicitation/request` 请求批准；宿主 app 自己的工具由 skillframe 自动批准，和 Claude Code 的 `--allowedTools` 效果一致。ACP 留到 M3 验证。
 
 ### 4.3 通道 ③：agent 改文件 → 界面刷新
 
@@ -236,7 +237,7 @@ resume-studio 保持原样，只当参考。下表是"读哪里、在 skillframe
 
 - 每个 driver 配一个**假 agent**：一个小脚本，按录好的真实协议记录回放（文字、工具调用、权限请求、出错、中途断开）。测试通过 `SKILLFRAME_<ID>_CMD` 换成假 agent，一条命令跑完全套，只输出一行汇总和失败名单。
 - 协议记录从真实 agent 录一次，存进仓库；agent 升级、协议变了，重录一次，测试立刻告诉你哪里不兼容。
-- 前端组件用无头浏览器测：每种卡片、每种状态、超长内容、窄宽两种宽度、亮暗两种颜色，用脚本量有没有溢出。
+- 前端组件用无头浏览器测：每种卡片、每种状态、超长内容、窄宽两种宽度、亮暗两种颜色，用脚本量有没有溢出。（M3 做。M2 手动发现并修掉的界面问题要补进去：快速点"新对话"再立刻切 agent，曾经因为新对话还没加载完而被当成旧对话处理。）
 - 真 agent 的端到端测试单独一条命令，手动跑，因为它会花额度。
 
 ---
@@ -246,7 +247,7 @@ resume-studio 保持原样，只当参考。下表是"读哪里、在 skillframe
 | 阶段 | 内容 | 判断标准 |
 |---|---|---|
 | M1 打通（2026-11-01 完成） | Claude Code driver（TS）+ 最简 HTTP/SSE + 一个能聊天的页面；验证 MCP 挂载（4.2 的待验证项） | 在示例页面里跟自己的 Claude Code 对话，agent 能调用一个宿主 app 声明的工具 |
-| M2 联动 | 三条通道、todo 示例、Codex driver | agent 改 `todos.yaml`，右边立刻刷新；Codex 跑同样的流程 |
+| M2 联动（2026-11-01 完成） | 三条通道、示例、Codex driver | agent 改共享文件，右边立刻刷新；Codex 跑同样的流程。实际做法：示例沿用 Hello Notes，笔记存进 `workspace/notes.json`（JSON 而不是 YAML，核心不必多一个 YAML 依赖）。真实的 Claude Code 直接改文件、真实的 Codex 先用 app 工具再直接改文件，右边都自动刷新 |
 | M3 好用 | agent 栏补齐卡片和交互、ACP driver、中英文、假 agent 测试全套 | 功能达到 resume-studio 左边栏的水平 |
 | M4 发布 | 脚手架、Electron 示例、README、PROTOCOL.md、60 秒演示视频 | 一个没见过它的开发者照 README 5 分钟跑起来 |
 | M5 验证 | 发 Hacker News、X、Reddit、V2EX；你自己的下一个项目基于它来做 | 发布后 4 周内有没有别人用它做的 app |
