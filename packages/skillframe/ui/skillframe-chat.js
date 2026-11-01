@@ -783,11 +783,12 @@ class SkillframeChat extends HTMLElement {
       chats.length ? chats.map((c) => h("option", { value: c.id, selected: c.id === chatId }, c.title || this.t("newChat"))) : h("option", {}, this.t("newChat")),
     );
     const status = waiting ? this.t("waiting", { agent: this.agentName }) : busy ? this.t("working", { agent: this.agentName }) : "";
-    this.bar.replaceChildren(
+    // replaceChildren() writes a null out as the text "null": leave the agent out until the app is known
+    this.bar.replaceChildren(...[
       chats.length ? select : h("span", { style: "flex:1" }),
       this.state.app ? h("span", { class: "agent", title: status }, h("span", { class: `dot ${waiting ? "waiting" : busy ? "busy" : ""}` }), this.agentPicker()) : null,
       h("button", { class: "ghost", onclick: () => this.newChat().catch((e) => { this.state.error = e.message; this.render(); }) }, this.t("newChat")),
-    );
+    ].filter(Boolean));
   }
 
   agentPicker() {

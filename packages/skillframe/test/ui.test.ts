@@ -224,6 +224,18 @@ describe("the sidebar in a browser", async () => {
     await page.close();
   });
 
+  test("before the app's details arrive, the top bar shows no stray text", { skip: !browser }, async () => {
+    const { page } = await open();
+    const bar = await page.evaluate(() => {
+      const el = document.querySelector("skillframe-chat") as any;
+      el.state.app = null; // as in the first moments after the page loads
+      el.renderBar();
+      return el.shadowRoot.querySelector(".bar").textContent;
+    });
+    assert.doesNotMatch(bar, /null|undefined/);
+    await page.close();
+  });
+
   test("a new chat on another agent gets that agent's pickers (not only chats opened at load)", { skip: !browser }, async () => {
     const { page } = await open("codex");
     await say(page, "hello");

@@ -19,6 +19,22 @@
 | 50–55 秒 | 侧边栏顶部的 agent 选择器切到 Codex，再发一句 "add: buy an umbrella" | Claude Code, Codex, or any ACP agent. | 右边多出一条 |
 | 55–60 秒 | 黑底：项目名 + 安装命令 + 仓库地址 | `npm create skillframe` · MIT | 仓库地址等发布时再填 |
 
+## 自动录制
+
+不用手动拍：`scripts/record-demo.mjs` 用本机真实的 Claude Code 和 Codex 把上面的分镜跑一遍，录成 `skillframe-demo.mp4`（1920×1080，约 54 秒）。等 agent 回复的片段会自动加速，画面右上角标出"Sped up N×"。成片在 `docs/media/skillframe-demo.mp4`。
+
+```bash
+node packages/create-skillframe/index.js <空文件夹>/my-app --skillframe file:<本仓库>/packages/skillframe
+cd <空文件夹>/my-app && npm install
+node <本仓库>/scripts/record-demo.mjs <空文件夹>/my-app <输出文件夹>
+```
+
+- 要先 `npm run build`（或 `npm test`），脚本用到 `packages/skillframe/dist`。
+- 需要 Chrome、ffmpeg，以及 Playwright 自己的 ffmpeg（`npx playwright-core install ffmpeg`）。
+- 录一次大约花掉 Claude Code 和 Codex 各两三条消息的额度。
+- 录制时 Claude Code 只加载 app 自己的 MCP 服务器（`--strict-mcp-config`），录制机器上的其他 MCP 服务器和它们的登录提示不会进画面。
+- 终端那一镜和代码那一镜是脚本画出来的页面：终端里的输出是 create-skillframe 和 app 的真实输出（去掉了路径），代码是 `server.js` 的缩写版，画面上标了"shortened"。
+
 ## 拍之前自查
 
 - 画面里不能出现你的邮箱、账号名、API key、终端里的私人路径。登录状态只显示"已登录"，不要打开账号页面。
