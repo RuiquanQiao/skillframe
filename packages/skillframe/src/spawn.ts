@@ -56,9 +56,10 @@ export function readShim(shim: string): Command | null {
     return null;
   }
   const dir = path.dirname(shim);
-  // every "%dp0%\..." (or "%~dp0\...") path the shim names, in order
-  const targets = [...text.matchAll(/"%~?dp0%?\\([^"]+)"/g)].map((m) => path.join(dir, m[1]));
-  const exe = targets.find((t) => /\.(exe|com)$/i.test(t) && !/\\node\.exe$/i.test(t));
+  // every "%dp0%\..." (or "%~dp0\...") path the shim names, in order. The shim writes Windows
+  // separators: split on them, so this reads the same on every system
+  const targets = [...text.matchAll(/"%~?dp0%?\\([^"]+)"/g)].map((m) => path.join(dir, ...m[1].split("\\")));
+  const exe = targets.find((t) => /\.(exe|com)$/i.test(t) && !/[\\/]node\.exe$/i.test(t));
   if (exe && isFile(exe)) return { file: exe, args: [] };
   const script = targets.find((t) => /\.(c|m)?js$/i.test(t));
   if (script && isFile(script)) {
