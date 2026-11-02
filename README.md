@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/RuiquanQiao/skillframe/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RuiquanQiao/skillframe/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/skillframe"><img alt="npm version" src="https://img.shields.io/npm/v/skillframe"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Node 22 or later" src="https://img.shields.io/badge/node-%E2%89%A522-339933">
   <img alt="No runtime dependencies" src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen">
@@ -60,10 +61,6 @@ npm start
 
 Open the address it prints: a todo list on the right, the agent on the left. Ask it to "add a todo
 to buy milk".
-
-> [!NOTE]
-> skillframe isn't on npm yet. Until the first release, clone this repository, run `npm install`,
-> then `npm run hello` for the example app.
 
 You need Node 22 or later and at least one of these agents installed and signed in:
 
@@ -303,7 +300,7 @@ Windows, macOS and Linux, on Node 22 and 24.
 - [x] Claude Code, Codex and ACP drivers; tools over MCP; shared files with conflict detection
 - [x] Permission, question and plan cards; mode and model pickers; attachments; forks
 - [x] `npm create skillframe`, an Electron example, CI on three systems
-- [ ] First release on npm
+- [x] First release on npm
 - [ ] Full chat verified with a real ACP agent (Qwen Code)
 - [ ] More agents, such as Pi
 

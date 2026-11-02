@@ -7,6 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/RuiquanQiao/skillframe/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RuiquanQiao/skillframe/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://www.npmjs.com/package/skillframe"><img alt="npm 版本" src="https://img.shields.io/npm/v/skillframe"></a>
   <a href="LICENSE"><img alt="MIT 协议" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Node 22 及以上" src="https://img.shields.io/badge/node-%E2%89%A522-339933">
   <img alt="零运行时依赖" src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen">
@@ -58,10 +59,6 @@ npm start
 ```
 
 打开它打印出的地址：右边是待办列表，左边是 agent。让它"add a todo to buy milk"（加一条待办：买牛奶）。
-
-> [!NOTE]
-> skillframe 还没发布到 npm。在第一个版本发布前，请克隆本仓库，运行 `npm install`，再用
-> `npm run hello` 打开示例 app。
 
 需要 Node 22 及以上，并且电脑上至少装好、登录了下面一个 agent：
 
@@ -291,7 +288,7 @@ CI 在 Windows、macOS、Linux 三个系统、Node 22 和 24 上都跑一遍。
 - [x] Claude Code、Codex、ACP 三种 driver；工具走 MCP；共享文件带冲突检测
 - [x] 权限、提问、计划卡片；模式和模型选择器；附件；分叉
 - [x] `npm create skillframe`、Electron 示例、三系统 CI
-- [ ] 第一个版本发布到 npm
+- [x] 第一个版本发布到 npm
 - [ ] 用真实的 ACP agent（Qwen Code）验证完整对话
 - [ ] 支持更多 agent，比如 Pi
 

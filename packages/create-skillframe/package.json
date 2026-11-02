@@ -5,6 +5,9 @@
   "keywords": ["skillframe", "create", "scaffold", "claude-code", "codex"],
   "author": "Ruiquan Qiao",
   "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/RuiquanQiao/skillframe.git", "directory": "packages/create-skillframe" },
+  "homepage": "https://github.com/RuiquanQiao/skillframe#readme",
+  "bugs": "https://github.com/RuiquanQiao/skillframe/issues",
   "type": "module",
   "bin": {
     "create-skillframe": "index.js"
