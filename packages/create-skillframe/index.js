@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-// npm create skillframe <folder> [--skillframe <version or path>]
+// npm create skillframe <folder> [--eject] [--skillframe <version or path>]
 //
 // Copies a small working app (a todo list the user and their coding agent share) into a new
-// folder, then says how to start it and which agents this computer has.
+// folder, then says how to start it and which agents this computer has. With --eject, skillframe
+// itself is copied into the app too (./skillframe), for a developer who wants to change its core
+// or sidebar, instead of being installed from npm.
 import { cpSync, existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { eject } from "skillframe/eject";
 
 const TEMPLATE = path.join(path.dirname(fileURLToPath(import.meta.url)), "template");
 const AGENTS = [
@@ -42,8 +45,11 @@ const flag = (name) => {
   return value;
 };
 const skillframe = flag("--skillframe") ?? "^0.1.0";
+const ejecting = args.includes("--eject");
+if (ejecting) args.splice(args.indexOf("--eject"), 1);
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("\n  npm create skillframe <folder> [-- --skillframe <version or file:path>]\n");
+  console.log("\n  npm create skillframe <folder> [-- --eject] [-- --skillframe <version or file:path>]\n");
+  console.log("  --eject  copy skillframe's core and sidebar into the app (./skillframe) to change them\n");
   process.exit(0);
 }
 const target = args[0];
@@ -62,9 +68,21 @@ renameSync(path.join(dir, "gitignore"), path.join(dir, ".gitignore"));
 const title = name.split(/[-._]/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
 // a path dependency is written relative to the new app, so the folder can move with it
 const dep = skillframe.startsWith("file:") ? `file:${path.relative(dir, path.resolve(skillframe.slice(5))).split(path.sep).join("/")}` : skillframe;
+const own = ejecting
+  ? "- `skillframe/`: skillframe's core and sidebar, copied into this app so you can change any of it.\n  `skillframe/README.md` says which file does what."
+  : "- skillframe itself comes from npm. To change its core or sidebar, copy it into this app with\n  `npx skillframe eject`.";
 for (const file of ["package.json", "server.js", "public/index.html", "README.md"]) {
   const p = path.join(dir, file);
-  writeFileSync(p, readFileSync(p, "utf8").replaceAll("{{name}}", name).replaceAll("{{title}}", title).replaceAll("{{skillframe}}", dep));
+  writeFileSync(p, readFileSync(p, "utf8").replaceAll("{{name}}", name).replaceAll("{{title}}", title).replaceAll("{{skillframe}}", dep).replaceAll("{{own}}", own));
+}
+if (ejecting) {
+  eject(path.join(dir, "skillframe"));
+  const server = path.join(dir, "server.js");
+  writeFileSync(server, readFileSync(server, "utf8").replace('from "skillframe";', 'from "./skillframe/index.js";'));
+  const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+  delete pkg.dependencies.skillframe;
+  if (!Object.keys(pkg.dependencies).length) delete pkg.dependencies;
+  writeFileSync(path.join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
 }
 
 const found = AGENTS.filter((a) => onPath(a.exe));

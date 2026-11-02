@@ -46,8 +46,9 @@ skillframe 给你的 app 加一个侧边栏，里面跑的是**用户自己的 c
   什么。你的按钮也能直接在侧边栏里发起任务。
 - **不绑定一家。** Claude Code、Codex 和 ACP agent 共用一个侧边栏，用户自己选，你的产品不用押宝在
   一家厂商身上。
-- **拿来就能用。** 一个 Web Component 加一个 Node 函数。零运行时依赖，任何前端框架都行，不用框架也
-  行，Electron、Tauri 里也能跑。
+- **拿来就能用，也能拿去随便改。** 一个 Web Component 加一个 Node 函数。零运行时依赖，任何前端框架
+  都行，不用框架也行，Electron、Tauri 里也能跑。想改核心或侧边栏本身？`npx skillframe eject` 会把它们
+  拷进你的 app（见[改成你自己的代码](#改成你自己的代码)）。
 - **窗口其余部分都是你的。** skillframe 只占侧边栏。旁边放什么（编辑器、画布、仪表盘、游戏）由你决定。
 
 为什么不做成 Claude Code 里的插件？因为 Claude Code 和 Codex 没法在它们自己的窗口里显示你的 app：
@@ -106,9 +107,9 @@ const sf = createSkillframe({
 await sf.listen({ port: 4320 });
 ```
 
-> [!IMPORTANT]
-> 不要把 `workspace` 放进你 app 的源码仓库。Claude Code 按 git 仓库保存记忆，agent 如果在你的仓库里
-> 干活，会和开发这个仓库的人共用一份记忆。
+> [!TIP]
+> `workspace` 通常放在你 app 的源码仓库外面比较好：Claude Code 按 git 仓库保存记忆，agent 如果在你的
+> 仓库里干活，会和开发这个仓库的人共用一份记忆。这只是建议，skillframe 不做限制，放哪个文件夹都能用。
 
 ### 页面（任何框架，或者不用框架）
 
@@ -185,6 +186,36 @@ Tauri 和普通浏览器窗口也是同样的做法。
 | CSS 变量 | `--sf-ink`、`--sf-muted`、`--sf-line`、`--sf-soft`、`--sf-accent`、`--sf-attention`、`--sf-danger`、`--sf-bg` |
 
 </details>
+
+## 改成你自己的代码
+
+skillframe 是 MIT 协议，本来就是让人改的。两种用法都行：
+
+- **当依赖用**（`import from "skillframe"`）：`npm update` 就能拿到修复；通过上面的选项、工具、事件和
+  CSS 变量来定制。
+- **当自己的代码用**：拷进你的 app，什么都能改，侧边栏的样子、路由、agent 怎么启动都行。代价是不再从
+  npm 收到更新；上游改了什么看 [CHANGELOG](CHANGELOG.md)。
+
+```bash
+npx skillframe eject                     # 已经装了 skillframe 的 app：拷到 ./skillframe
+npm create skillframe my-app -- --eject  # 新建一个 app，skillframe 直接拷在里面
+```
+
+然后按路径引用：`import { createSkillframe } from "./skillframe/index.js"`。拷出来的是 npm 包里那份
+纯 JavaScript，不用构建；它对应的 TypeScript 源码在 [packages/skillframe/src](packages/skillframe/src)。
+
+| 拷出来的文件 | 管什么 |
+|---|---|
+| `ui/skillframe-chat.js` | 整个侧边栏：一个 Web Component，样式在它自己的 shadow root 里 |
+| `core/index.js` | `createSkillframe()` 和它的选项 |
+| `core/http.js` | 侧边栏调用的路由，以及只允许本机访问的检查 |
+| `core/chat/runner.js`、`core/chat/store.js` | 跑回复；保存对话 |
+| `core/drivers/claude.js`、`codex.js`、`acp.js`；`core/agents.js` | 每个 agent 怎么启动、怎么通信；agent 列表 |
+| `core/mcp.js` | 你的 `tools`，通过 MCP 提供给 agent |
+| `core/files.js` | 监听共享文件、检测冲突 |
+
+完整列表在拷出来的那份 README 里。`ui/` 和 `bin/` 要和 `core/` 放在同一层：核心是从自己的文件夹往上找
+它们的。
 
 ## 侧边栏能做什么
 
@@ -291,6 +322,7 @@ agent 打交道的核心是这个 Node 包；别的语言的后端可以把它�
 | 跑起示例 | [快速开始](#快速开始) |
 | 给已有的 app 加侧边栏 | [接进你的 app](#接进你的-app) |
 | 放进桌面应用 | [examples/electron](examples/electron) |
+| 改核心或侧边栏本身 | [改成你自己的代码](#改成你自己的代码) |
 | 用别的语言驱动侧边栏 | [docs/PROTOCOL.md](docs/PROTOCOL.md)（英文） |
 | 了解背后的设计决定 | [docs/DESIGN.md](docs/DESIGN.md) |
 | 重新录制演示视频 | [docs/DEMO.md](docs/DEMO.md) |

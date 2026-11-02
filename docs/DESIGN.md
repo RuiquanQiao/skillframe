@@ -16,7 +16,7 @@
 
 | 词 | 意思 |
 |---|---|
-| **宿主 app** | 装了 skillframe 的那个 app，比如以后的某个论文工具。它是主角，skillframe 只是它的一个依赖。 |
+| **宿主 app** | 用了 skillframe 的那个 app，比如以后的某个论文工具。它是主角。skillframe 是给它的"预制菜"：可以当 npm 依赖装上就用，也可以 `npx skillframe eject` 把核心和界面拷进宿主 app 的源码里随便改（2026-11-02 起，见 README 的 Make it yours）。两种都是正当用法，设计和文档不能假设开发者不会改它的内部。 |
 | **agent 栏** | skillframe 提供的聊天侧边栏：选 agent、流式回复、工具步骤、权限确认卡片、提问卡片、中断、附件等。resume-studio 左边那一栏就是它的原型。 |
 | **coding agent / agent CLI** | 用户自己装的命令行 agent：`claude`（Claude Code）、`codex`（Codex CLI）、`qwen`、`pi` 等。各自管自己的登录。 |
 | **driver** | skillframe 里"怎么跟某一种 agent CLI 对话"的那一层代码。每种协议一个 driver。 |

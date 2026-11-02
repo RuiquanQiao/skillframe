@@ -46,8 +46,10 @@ See [How it compares](#how-it-compares).
   and is told what the user is looking at. Your buttons can start a task in the sidebar.
 - **Any agent.** Claude Code, Codex and ACP agents behind one sidebar. Users pick; you don't bet
   your product on one vendor.
-- **Drop-in.** One Web Component and one Node function. No runtime dependencies, any front-end
-  framework or none, and it runs in Electron or Tauri too.
+- **Drop-in, or yours to change.** One Web Component and one Node function. No runtime
+  dependencies, any front-end framework or none, and it runs in Electron or Tauri too. Want to
+  change the core or the sidebar itself? `npx skillframe eject` copies them into your app
+  ([Make it yours](#make-it-yours)).
 - **The rest of the window is yours.** skillframe is only the sidebar. What goes next to it (an
   editor, a canvas, a dashboard, a game) is up to you.
 
@@ -108,9 +110,10 @@ const sf = createSkillframe({
 await sf.listen({ port: 4320 });
 ```
 
-> [!IMPORTANT]
-> Keep `workspace` out of your app's source repository. Claude Code keeps its memory per git
-> repository, so an agent working inside your repo would share memory with whoever develops it.
+> [!TIP]
+> A `workspace` outside your app's source repository is usually what you want: Claude Code keeps
+> its memory per git repository, so an agent working inside your repo shares memory with whoever
+> develops it. skillframe doesn't enforce this; any folder works.
 
 ### Page (any framework, or none)
 
@@ -188,6 +191,38 @@ In Electron, start skillframe in the main process and load its URL in the window
 | CSS variables | `--sf-ink`, `--sf-muted`, `--sf-line`, `--sf-soft`, `--sf-accent`, `--sf-attention`, `--sf-danger`, `--sf-bg` |
 
 </details>
+
+## Make it yours
+
+skillframe is MIT and meant to be changed. Use it either way:
+
+- **As a dependency** (`import from "skillframe"`): you get fixes with `npm update`, and you shape
+  it through the options, tools, events and CSS variables above.
+- **As your own code**: copy it into your app and change anything, the sidebar's look, the routes,
+  how an agent is started. You stop getting updates from npm; the
+  [changelog](CHANGELOG.md) says what changed upstream.
+
+```bash
+npx skillframe eject                     # in an app that has skillframe: copies it to ./skillframe
+npm create skillframe my-app -- --eject  # a new app with skillframe already copied in
+```
+
+Then import it by path: `import { createSkillframe } from "./skillframe/index.js"`. The copy is the
+plain JavaScript npm ships (no build step); the TypeScript it comes from is in
+[packages/skillframe/src](packages/skillframe/src).
+
+| File in the copy | What it does |
+|---|---|
+| `ui/skillframe-chat.js` | the whole sidebar: one Web Component, styles in its shadow root |
+| `core/index.js` | `createSkillframe()` and its options |
+| `core/http.js` | the routes the sidebar calls, and the local-only checks |
+| `core/chat/runner.js`, `core/chat/store.js` | running replies; saving chats |
+| `core/drivers/claude.js`, `codex.js`, `acp.js`; `core/agents.js` | how each agent is started and spoken to; the list of agents |
+| `core/mcp.js` | your `tools`, served to the agent over MCP |
+| `core/files.js` | watched shared files and conflict detection |
+
+The copy's own README has the full list. Keep `ui/` and `bin/` next to `core/`: the core finds them
+by looking upward from its own folder.
 
 ## What the sidebar does
 
@@ -304,6 +339,7 @@ run it as a small sidecar process, or reimplement the protocol.
 | Run the example | [Quick start](#quick-start) |
 | Add the sidebar to an app you have | [Use it in your app](#use-it-in-your-app) |
 | Put it in a desktop app | [examples/electron](examples/electron) |
+| Change the core or the sidebar itself | [Make it yours](#make-it-yours) |
 | Drive the sidebar from another language | [docs/PROTOCOL.md](docs/PROTOCOL.md) |
 | Read the decisions behind it | [docs/DESIGN.md](docs/DESIGN.md) (Chinese) |
 | Re-record the demo | [docs/DEMO.md](docs/DEMO.md) (Chinese) |

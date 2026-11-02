@@ -2,7 +2,7 @@
 // and have the agent (a fake one) use the app's tools.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, describe, test } from "node:test";
 import { appDataDir } from "../src/index.js";
@@ -29,7 +29,7 @@ describe("appDataDir", () => {
 
 describe("what npm would publish", () => {
   for (const [pkg, must] of [
-    ["skillframe", ["README.md", "LICENSE", "dist/src/index.js", "dist/src/index.d.ts", "src/index.ts", "ui/skillframe-chat.js", "bin/mcp-bridge.js"]],
+    ["skillframe", ["README.md", "LICENSE", "dist/src/index.js", "dist/src/index.d.ts", "src/index.ts", "ui/skillframe-chat.js", "bin/mcp-bridge.js", "bin/eject.js", "bin/skillframe.js"]],
     ["create-skillframe", ["README.md", "LICENSE", "index.js", "template/server.js", "template/gitignore", "template/public/index.html"]],
   ] as const) {
     test(`${pkg} carries everything it needs, and no tests`, { timeout: 120_000 }, () => {
@@ -71,16 +71,8 @@ describe("npm create skillframe", () => {
     assert.equal(install.status, 0, install.stderr);
 
     const home = path.join(root, "data");
-    server = spawn(process.execPath, ["server.js"], { cwd: app, env: { ...fakeEnv(), PORT: "0", APP_HOME: home } });
-    const url = await new Promise<string>((resolve, reject) => {
-      let out = "";
-      server!.stdout!.on("data", (d) => {
-        out += d;
-        const m = out.match(/running at (http:\/\/\S+?)\/?\s/);
-        if (m) resolve(m[1]);
-      });
-      server!.on("exit", (code) => reject(new Error(`the app exited (${code}): ${out}`)));
-    });
+    let url: string;
+    ({ server, url } = await start(app, home));
 
     assert.match((await request(url + "/", "GET")).text, /<skillframe-chat/);
     const todos = (await request(`${url}/sf/files?path=todos.json`, "GET")).json;
@@ -88,16 +80,92 @@ describe("npm create skillframe", () => {
     assert.ok(existsSync(path.join(home, "workspace", "todos.json")), "data goes to the app's data folder");
 
     // the fake agent calls the app's first tool (list_todos) over MCP
-    const chat = (await request(`${url}/sf/chats`, "POST", { agent: "claude" })).json.id;
-    await request(`${url}/sf/chats/${chat}/send`, "POST", { text: "tool {}" });
-    let reply: any;
-    for (let i = 0; i < 100 && !reply; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      const m = (await request(`${url}/sf/chats/${chat}`, "GET")).json;
-      if (!m.live && m.messages.length === 2) reply = m.messages[1];
-    }
-    const step = reply.blocks.find((b: any) => b.type === "tool");
-    assert.equal(step.status, "done");
-    assert.match(step.result, /Ask the agent to add a todo/);
+    assert.match(await toolResult(url, "claude"), /Ask the agent to add a todo/);
   });
 });
+
+describe("npm create skillframe --eject", () => {
+  const root = tmpDir("eject");
+  const app = path.join(root, "own");
+  let server: ReturnType<typeof spawn> | undefined;
+  after(() => server?.kill());
+
+  test("puts skillframe's core and sidebar in the app, imported by path", () => {
+    const made = spawnSync(process.execPath, [CREATE, app, "--eject"], { encoding: "utf8", cwd: root });
+    assert.equal(made.status, 0, made.stderr);
+    for (const f of ["skillframe/index.js", "skillframe/core/index.js", "skillframe/core/drivers/acp.js", "skillframe/ui/skillframe-chat.js", "skillframe/bin/mcp-bridge.js", "skillframe/README.md", "skillframe/LICENSE"]) {
+      assert.ok(existsSync(path.join(app, f)), f);
+    }
+    assert.ok(!existsSync(path.join(app, "skillframe/core/index.d.ts")), "no type files that would go stale");
+    assert.equal(JSON.parse(readFileSync(path.join(app, "package.json"), "utf8")).dependencies, undefined, "nothing to install");
+    assert.match(readFileSync(path.join(app, "server.js"), "utf8"), /from "\.\/skillframe\/index\.js"/);
+    assert.match(readFileSync(path.join(app, "README.md"), "utf8"), /skillframe\/README\.md/);
+  });
+
+  test("the app runs its own copy: an edit to the copied sidebar is what the page gets, and tools work over HTTP and the stdio bridge", { timeout: 60_000 }, async () => {
+    const ui = path.join(app, "skillframe/ui/skillframe-chat.js");
+    writeFileSync(ui, readFileSync(ui, "utf8") + "\n// edited in the app\n");
+    let url: string;
+    ({ server, url } = await start(app, path.join(root, "data")));
+
+    const page = await request(`${url}/sf/ui/skillframe-chat.js`, "GET");
+    assert.equal(page.status, 200);
+    assert.match(page.text, /edited in the app/);
+    assert.match(await toolResult(url, "claude"), /Ask the agent to add a todo/);
+    // the fake ACP agent takes no HTTP MCP servers, so this goes through the copied bin/mcp-bridge.js
+    assert.match(await toolResult(url, "qwen"), /Ask the agent to add a todo/);
+  });
+});
+
+describe("npx skillframe eject", () => {
+  const CLI = path.join(PKG, "bin/skillframe.js");
+  const root = tmpDir("eject-cli");
+
+  test("copies into ./skillframe, says which import to change, and won't overwrite", () => {
+    const r = spawnSync(process.execPath, [CLI, "eject"], { encoding: "utf8", cwd: root });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(existsSync(path.join(root, "skillframe/core/index.js")));
+    assert.match(r.stdout, /from "\.\/skillframe\/index\.js"/);
+    const again = spawnSync(process.execPath, [CLI, "eject"], { encoding: "utf8", cwd: root });
+    assert.equal(again.status, 1);
+    assert.match(again.stderr, /isn't empty/);
+  });
+
+  test("explains itself without a command, and fails on an unknown one", () => {
+    const help = spawnSync(process.execPath, [CLI], { encoding: "utf8" });
+    assert.equal(help.status, 0);
+    assert.match(help.stdout, /skillframe eject/);
+    assert.equal(spawnSync(process.execPath, [CLI, "ejcet"], { encoding: "utf8" }).status, 1);
+  });
+});
+
+/** starts a made app's server.js with fake agents; resolves with the address it prints */
+function start(app: string, home: string) {
+  const server = spawn(process.execPath, ["server.js"], { cwd: app, env: { ...fakeEnv(), PORT: "0", APP_HOME: home } });
+  const url = new Promise<string>((resolve, reject) => {
+    let out = "";
+    server.stdout!.on("data", (d) => {
+      out += d;
+      const m = out.match(/running at (http:\/\/\S+?)\/?\s/);
+      if (m) resolve(m[1]);
+    });
+    server.on("exit", (code) => reject(new Error(`the app exited (${code}): ${out}`)));
+  });
+  return url.then((u) => ({ server, url: u }));
+}
+
+/** has a fake agent call the app's first tool (list_todos); resolves with the tool's result */
+async function toolResult(url: string, agent: string): Promise<string> {
+  const chat = (await request(`${url}/sf/chats`, "POST", { agent })).json.id;
+  await request(`${url}/sf/chats/${chat}/send`, "POST", { text: "tool {}" });
+  let reply: any;
+  for (let i = 0; i < 100 && !reply; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    const m = (await request(`${url}/sf/chats/${chat}`, "GET")).json;
+    if (!m.live && m.messages.length === 2) reply = m.messages[1];
+  }
+  assert.ok(reply, `${agent} never finished`);
+  const step = reply.blocks.find((b: any) => b.type === "tool");
+  assert.equal(step?.status, "done", JSON.stringify(reply.blocks));
+  return step.result;
+}

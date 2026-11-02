@@ -9,12 +9,12 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { IMAGE_TYPES } from "./chat/store.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Core } from "./index.js";
 import { Busy, NotFound } from "./chat/runner.js";
 import { Conflict, OutsideWatch } from "./files.js";
+import { OWN_ROOT } from "./paths.js";
 
-const UI_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../ui");
+const UI_DIR = path.join(OWN_ROOT, "ui");
 const BODY_CAP = 25 * 1024 * 1024; // an attachment arrives as base64 in JSON
 
 const TYPES: Record<string, string> = {

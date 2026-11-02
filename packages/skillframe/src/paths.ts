@@ -1,5 +1,20 @@
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/**
+ * skillframe's own folder, the one that holds ui/ and bin/. Found by walking up from this file,
+ * so the same code runs from the npm package (dist/src/) and from a copy inside an app (core/,
+ * after `npx skillframe eject`).
+ */
+export const OWN_ROOT = (() => {
+  const start = path.dirname(fileURLToPath(import.meta.url));
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (existsSync(path.join(dir, "ui", "skillframe-chat.js"))) return dir;
+    if (path.dirname(dir) === dir) throw new Error(`skillframe can't find its ui/ folder above ${start}`);
+  }
+})();
 
 /**
  * Where an app keeps its users' data, the way each system expects it:

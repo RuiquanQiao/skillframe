@@ -3,6 +3,21 @@
 All notable changes to the `skillframe` and `create-skillframe` packages. Versions follow
 [semantic versioning](https://semver.org); before 1.0, a minor version may change the API.
 
+## skillframe 0.1.3, create-skillframe 0.1.2 (2026-11-02)
+
+skillframe is now meant to be copied and changed as well as installed.
+
+- New: `npx skillframe eject [folder]` copies the core (plain JavaScript, no build step), the
+  sidebar and the MCP bridge into your app, with a README saying which file does what. The app
+  then imports `./skillframe/index.js` and stops getting updates from npm.
+- New: `npm create skillframe my-app -- --eject` makes the example app with skillframe already
+  copied in.
+- Changed: the core finds its `ui/` and `bin/` folders by looking upward from its own folder,
+  instead of at a fixed depth, so it runs from the npm package and from a copy alike.
+- README (English and Chinese): a "Make it yours" section; the note on keeping `workspace` out of
+  your repository is now a tip with its reason, not a rule.
+- create-skillframe now depends on skillframe (for `--eject`).
+
 ## skillframe 0.1.2, create-skillframe 0.1.1 (2026-11-02)
 
 No code changes. This release only makes the packages easier to find.

@@ -1,6 +1,6 @@
 {
   "name": "create-skillframe",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Start an app with a sidebar that runs your users' own coding agent: npm create skillframe my-app",
   "keywords": [
     "skillframe", "create", "create-app", "scaffold", "starter", "template",
@@ -16,6 +16,9 @@
   "type": "module",
   "bin": {
     "create-skillframe": "index.js"
+  },
+  "dependencies": {
+    "skillframe": "^0.1.3"
   },
   "files": [
     "index.js",

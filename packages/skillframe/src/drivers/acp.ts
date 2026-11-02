@@ -6,16 +6,16 @@
 // block. The host app's tools go in `mcpServers`: as an HTTP server when the agent says it takes
 // one, else through skillframe's stdio bridge (bin/mcp-bridge.js) to the same endpoint.
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ChatRunner, Turn } from "../chat/runner.js";
 import { toolHint } from "../chat/runner.js";
 import type { AskBlock, Decision } from "../chat/types.js";
+import { OWN_ROOT } from "../paths.js";
 import { Rpc } from "./codex.js";
 import type { Driver, ReplyEnd, TurnSpec } from "./driver.js";
 
 type Obj = Record<string, any>;
 
-const BRIDGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../bin/mcp-bridge.js");
+const BRIDGE = path.join(OWN_ROOT, "bin", "mcp-bridge.js");
 
 // ACP's tool kinds, named like Claude Code's tools so the sidebar draws them the same way
 const TOOLS: Record<string, string> = {

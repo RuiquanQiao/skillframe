@@ -17,3 +17,4 @@ milk", or to "tick off everything about groceries".
 - The todos live in `todos.json` in the app's data folder (printed at start), outside this source
   folder: Claude Code keeps its memory per git repository, so the agent's working folder shouldn't
   be inside yours.
+{{own}}
