@@ -80,6 +80,24 @@ describe("md() tables", () => {
     assert.doesNotMatch(md("a | b\n---"), /<table>/);
   });
 
+  test("a long path or URL in a cell may wrap after / ? & = _, but links and entities stay intact", () => {
+    const html = md("| a | b |\n|---|---|\n| src/ui/chat_view.js | [x](https://e.com/a/b?q=1&r=2) https://e.com/a?q=1&r=2 |");
+    assert.match(html, /<td>src\/<wbr>ui\/<wbr>chat_<wbr>view.js<\/td>/);
+    assert.match(html, /<a href="https:\/\/e.com\/a\/b\?q=1&amp;r=2" target="_blank" rel="noopener noreferrer">x<\/a>/);
+    assert.match(html, / https:\/\/<wbr>e.com\/<wbr>a\?<wbr>q=<wbr>1&amp;<wbr>r=<wbr>2<\/td>/);
+    // text outside tables is left alone
+    assert.equal(md("src/ui/chat.js"), "<p>src/ui/chat.js</p>");
+  });
+
+  test("a lone backtick does not swallow the rest of the row", () => {
+    assert.match(md("| a | b |\n|---|---|\n| `x | y |"), /<td>`x<\/td><td>y<\/td>/);
+  });
+
+  test("Windows line endings (\\r\\n)", () => {
+    assert.equal(md("| a |\r\n|---|\r\n| 1 |\r\n\r\nNext."), TBL("<th>a</th>", "<tr><td>1</td></tr>") + "<p>Next.</p>");
+    assert.equal(md("One.\r\n\r\nTwo."), "<p>One.</p><p>Two.</p>");
+  });
+
   test("empty and odd input", () => {
     assert.equal(md(""), "");
     assert.doesNotMatch(md("|\n|"), /<table>/);

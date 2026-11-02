@@ -112,11 +112,23 @@ describe("the sidebar in a browser", async () => {
     assert.deepEqual(t.head, [["赛道", "left"], ["自动化", "right"], ["风险", "center"]]);
     assert.deepEqual(t.rows[0], ["AI 朗读 <code>reddit</code> 故事", "90", "<strong>高</strong>"]);
     assert.deepEqual(t.rows[1], ["a | b", "65", "低"]);
-    assert.equal(t.rows.length, 3);
+    assert.equal(t.rows.length, 4);
     assert.equal(t.pipes, false);
     for (const width of [320, 800]) {
       await page.setViewportSize({ width, height: 700 });
       assert.deepEqual(await spills(page), { out: [], sideways: false, page: false }, `${width}px`);
+      // a narrow sidebar makes the table scroll; it must not squeeze a column until a word breaks
+      const broken = await page.evaluate(() => {
+        const md = [...document.querySelector("skillframe-chat")!.shadowRoot!.querySelectorAll(".md")].find((n) => n.textContent!.includes("After the table."))!;
+        return [...md.querySelectorAll("tbody tr:last-child td")]
+          .filter((c) => {
+            const r = document.createRange();
+            r.selectNodeContents(c);
+            return r.getClientRects().length > 1;
+          })
+          .map((c) => c.textContent);
+      });
+      assert.deepEqual(broken, [], `${width}px: one-word cells broken across lines`);
     }
     await page.close();
   });

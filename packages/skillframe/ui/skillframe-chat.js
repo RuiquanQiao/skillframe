@@ -168,8 +168,10 @@ button { cursor: pointer; }
 .md a { color: var(--sf-accent); }
 .md .tbl { overflow-x: auto; margin: 0 0 8px; }
 .md table { border-collapse: collapse; font-size: 12px; }
-.md th, .md td { border: 1px solid var(--sf-line); padding: 3px 8px; vertical-align: top; min-width: 3em; }
-.md th { background: var(--sf-soft); font-weight: 600; white-space: nowrap; }
+/* "anywhere" (from .md) would let a narrow sidebar squeeze columns to a letter wide, cutting words in
+   half; with break-word, words stay whole and a table that does not fit scrolls inside .tbl */
+.md th, .md td { border: 1px solid var(--sf-line); padding: 3px 8px; vertical-align: top; min-width: 3em; overflow-wrap: break-word; }
+.md th { background: var(--sf-soft); font-weight: 600; }
 details.think { color: var(--sf-muted); }
 details.think summary { cursor: pointer; width: fit-content; }
 details.think .md { padding: 4px 0 0 12px; border-left: 1px solid var(--sf-line); margin-top: 4px; white-space: pre-wrap; }
@@ -247,7 +249,8 @@ function h(tag, attrs = {}, ...kids) {
 
 /** Just enough markdown for agent replies, built on escaped text (nothing raw reaches innerHTML). */
 export function md(src) {
-  const blocks = String(src ?? "").split(/(```[^\n]*\n[\s\S]*?(?:```|$))/g);
+  // an agent on Windows may write \r\n, which would hide its blank lines from the split below
+  const blocks = String(src ?? "").replace(/\r\n?/g, "\n").split(/(```[^\n]*\n[\s\S]*?(?:```|$))/g);
   let out = "";
   for (const part of blocks) {
     const fence = part.match(/^```[^\n]*\n([\s\S]*?)(?:```)?$/);
@@ -282,7 +285,8 @@ function cells(line) {
       pipes++;
       endsOnPipe = true;
     } else {
-      if (s[i] === "`") code = !code;
+      // a lone ` is just a character, not the start of code that never ends
+      if (s[i] === "`" && (code || s.includes("`", i + 1))) code = !code;
       cell += s[i];
     }
   }
@@ -317,11 +321,15 @@ function paragraph(lines) {
 /** A GitHub-style table; a wide one scrolls sideways inside its own box, not the sidebar. */
 function table([head, rule, ...rows]) {
   const align = cells(rule).map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : ""));
-  const td = (tag, c, i) => `<${tag}${align[i] ? ` style="text-align:${align[i]}"` : ""}>${inline(c)}</${tag}>`;
+  const td = (tag, c, i) => `<${tag}${align[i] ? ` style="text-align:${align[i]}"` : ""}>${breakable(inline(c))}</${tag}>`;
   const width = align.length;
   const row = (l, tag) => "<tr>" + cells(l).slice(0, width).concat(Array(width).fill("")).slice(0, width).map((c, i) => td(tag, c, i)).join("") + "</tr>";
   return `<div class="tbl"><table><thead>${row(head, "th")}</thead><tbody>${rows.map((l) => row(l, "td")).join("")}</tbody></table></div>`;
 }
+
+/** Lets a path or URL in a table cell wrap after / ? & = _ (text only, never inside a tag), so one
+ *  long path cannot widen its column until the others are a letter wide; words still stay whole. */
+const breakable = (html) => html.replace(/(<[^>]*>)|([^<]+)/g, (_, tag, text) => tag ?? text.replace(/(\/|\?|&amp;|=|_)(?=[^\s/])/g, "$1<wbr>"));
 
 function inline(s) {
   const parts = String(s).split(/(`[^`]+`)/g);

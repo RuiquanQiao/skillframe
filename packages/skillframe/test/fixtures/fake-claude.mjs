@@ -74,7 +74,7 @@ async function reply(text, content) {
     // the way agents write them: right under a sentence, CJK, and one row wider than any sidebar
     say(
       "三个赛道的评分：\n| 赛道 | 自动化 | 风险 |\n|:---|---:|:-:|\n| AI 朗读 `reddit` 故事 | 90 | **高** |\n| a \\| b | 65 | 低 |\n" +
-        `| ${"wide".repeat(60)} | 1 | 2 |\n\nAfter the table.`,
+        `| ${"wide".repeat(60)} | 1 | 2 |\n| Medium | three | seven |\n\nAfter the table.`,
     );
     return done("table");
   }

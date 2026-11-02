@@ -9,8 +9,10 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
   often, so they now show as tables, including one written right under a sentence with no blank
   line. The `:--`, `:-:` and `--:` alignments are kept, bold, code and links work inside cells, and
   the leading and trailing `|` of each row are optional. A table too wide for the sidebar scrolls
-  sideways inside the reply. Lines with a `|` but no separator row (`|---|---|`) under them, and
-  a `|` inside a code block or inline code, stay plain text.
+  sideways inside the reply instead of squeezing a column until its words break in half, and a
+  long path or URL in a cell can wrap after `/`. Lines with a `|` but no separator row
+  (`|---|---|`) under them, and a `|` inside a code block or inline code, stay plain text.
+- Fixed: a reply with Windows line endings (`\r\n`) lost its paragraph breaks.
 - New example: `examples/grill-me` (`npm run grill`), the terminal-only `grilling` skill given a
   screen with a question form and a design tree.
 - New example: `examples/blank` (`npm run blank`), only the sidebar next to an empty main area.
