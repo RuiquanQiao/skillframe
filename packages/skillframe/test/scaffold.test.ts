@@ -102,6 +102,14 @@ describe("npm create skillframe --eject", () => {
     assert.match(readFileSync(path.join(app, "README.md"), "utf8"), /skillframe\/README\.md/);
   });
 
+  test("also ejects when the shell dropped `--` and npm passed --eject on as npm_config_eject", () => {
+    const other = path.join(root, "powershell");
+    const made = spawnSync(process.execPath, [CREATE, other], { encoding: "utf8", cwd: root, env: { ...process.env, npm_config_eject: "true" } });
+    assert.equal(made.status, 0, made.stderr);
+    assert.ok(existsSync(path.join(other, "skillframe/core/index.js")), "skillframe copied in");
+    assert.match(readFileSync(path.join(other, "server.js"), "utf8"), /from "\.\/skillframe\/index\.js"/);
+  });
+
   test("the app runs its own copy: an edit to the copied sidebar is what the page gets, and tools work over HTTP and the stdio bridge", { timeout: 60_000 }, async () => {
     const ui = path.join(app, "skillframe/ui/skillframe-chat.js");
     writeFileSync(ui, readFileSync(ui, "utf8") + "\n// edited in the app\n");

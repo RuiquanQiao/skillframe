@@ -45,8 +45,10 @@ const flag = (name) => {
   return value;
 };
 const skillframe = flag("--skillframe") ?? "^0.1.0";
-const ejecting = args.includes("--eject");
-if (ejecting) args.splice(args.indexOf("--eject"), 1);
+// Windows PowerShell 5.1 drops the `--` in `npm create skillframe my-app -- --eject`, so npm
+// takes --eject as its own setting and hands it over as npm_config_eject instead
+const ejecting = args.includes("--eject") || process.env.npm_config_eject === "true";
+if (args.includes("--eject")) args.splice(args.indexOf("--eject"), 1);
 if (args.includes("--help") || args.includes("-h")) {
   console.log("\n  npm create skillframe <folder> [-- --eject] [-- --skillframe <version or file:path>]\n");
   console.log("  --eject  copy skillframe's core and sidebar into the app (./skillframe) to change them\n");

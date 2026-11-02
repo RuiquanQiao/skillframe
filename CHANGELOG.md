@@ -3,6 +3,13 @@
 All notable changes to the `skillframe` and `create-skillframe` packages. Versions follow
 [semantic versioning](https://semver.org); before 1.0, a minor version may change the API.
 
+## create-skillframe 0.1.3 (2026-11-02)
+
+- Fixed: in Windows PowerShell 5.1, `npm create skillframe my-app -- --eject` made an app without
+  the copy and said nothing, because PowerShell drops the `--` and npm kept `--eject` for itself.
+  create-skillframe now also reads it from npm (`npm_config_eject`), so the command works in every
+  shell.
+
 ## skillframe 0.1.3, create-skillframe 0.1.2 (2026-11-02)
 
 skillframe is now meant to be copied and changed as well as installed.
