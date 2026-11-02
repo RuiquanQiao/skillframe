@@ -5,13 +5,18 @@
   "workspaces": [
     "packages/*",
     "examples/hello",
-    "examples/grill-me"
+    "examples/grill-me",
+    "examples/blank",
+    "examples/studio"
   ],
   "scripts": {
     "build": "tsc -b packages/skillframe examples/hello",
     "test": "tsc -b packages/skillframe && node packages/skillframe/dist/test/run.js",
     "hello": "tsc -b packages/skillframe examples/hello && node examples/hello/dist/server.js",
-    "grill": "tsc -b packages/skillframe && node examples/grill-me/server.js"
+    "grill": "tsc -b packages/skillframe && node examples/grill-me/server.js",
+    "blank": "tsc -b packages/skillframe && node examples/blank/server.js",
+    "studio": "tsc -b packages/skillframe && node examples/studio/server.js",
+    "exe": "node scripts/build-exe.mjs"
   },
   "engines": {
     "node": ">=22"

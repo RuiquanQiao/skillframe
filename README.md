@@ -361,7 +361,16 @@ Windows, macOS and Linux, on Node 22 and 24.
 - `examples/hello`: notes, with TypeScript (`npm run hello`)
 - `examples/grill-me`: a popular terminal-only skill (Matt Pocock's `grilling`) given a screen: the
   agent puts each round of questions in a form and the decisions grow into a tree (`npm run grill`)
+- `examples/blank`: only the sidebar, next to an empty main area, for trying skillframe itself
+  (`npm run blank`)
+- `examples/studio`: build an app inside skillframe. Open a project folder; the agent works in it
+  and the project's page runs beside the chat, reloading when a file changes and passing its
+  errors to the agent (`npm run studio -- <folder>`)
 - `examples/electron`: the same sidebar in an Electron window (`cd examples/electron && npm install && npm start`)
+
+On Windows, `npm run exe` makes `skillframe.exe`, `skillframe Studio.exe`, `Grill Me.exe` and
+`Hello Notes.exe` in the repository folder. Each opens its example in a window of its own, without a terminal, and stops it
+when the window closes. They need Node.js and `npm install`, and stay in the repository folder.
 
 ## Roadmap
 

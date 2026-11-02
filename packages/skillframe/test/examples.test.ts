@@ -2,7 +2,8 @@
 // page, and a fake agent calling their tools.
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import type { Page } from "playwright-core";
@@ -11,8 +12,8 @@ import { fakeEnv, launchBrowser, PKG, request, tmpDir } from "./helpers.js";
 const EXAMPLES = path.resolve(PKG, "../../examples");
 
 /** starts an example's server.js with fake agents and its data in `home`; resolves with its address */
-function start(dir: string, home: string) {
-  const server = spawn(process.execPath, ["server.js"], { cwd: dir, env: { ...fakeEnv(), PORT: "0", APP_HOME: home } });
+function start(dir: string, home: string, env: NodeJS.ProcessEnv = {}) {
+  const server = spawn(process.execPath, ["server.js"], { cwd: dir, env: { ...fakeEnv(), PORT: "0", APP_HOME: home, ...env } });
   const url = new Promise<string>((resolve, reject) => {
     let out = "";
     server.stdout!.on("data", (d) => {
@@ -152,5 +153,117 @@ describe("examples/grill-me", async () => {
   test("a tool call with a question id that doesn't exist says which ids there are", async () => {
     const r = await call(url, "settle", { id: "Q99", decision: "x" }, "error");
     assert.match(r, /There is no question Q99/);
+  });
+});
+
+describe("examples/studio", async () => {
+  const browser = await launchBrowser();
+  const home = tmpDir("studio");
+  const site = path.join(home, "site");
+  const other = path.join(home, "other");
+  mkdirSync(site, { recursive: true });
+  mkdirSync(path.join(other, "node_modules"), { recursive: true });
+  let server: ChildProcess;
+  let url: string;
+  const state = async () => (await request(`${url}/studio/state`, "GET")).json;
+
+  before(async () => {
+    ({ server, url } = await start(path.join(EXAMPLES, "studio"), home, { PROJECT: site }));
+  });
+
+  after(async () => {
+    await browser?.close();
+    server?.kill();
+  });
+
+  /** resolves true if the preview tells its pages to reload within `ms` of `act()` */
+  function reloads(preview: string, act: () => void, ms = 1500) {
+    return new Promise<boolean>((resolve) => {
+      const req = http.get(preview + "__studio/reload", (res) => {
+        res.setEncoding("utf8");
+        res.on("data", (d: string) => {
+          if (d.includes("data: reload")) { clearTimeout(timer); req.destroy(); resolve(true); }
+        });
+        setTimeout(act, 100);
+      });
+      const timer = setTimeout(() => { req.destroy(); resolve(false); }, ms);
+    });
+  }
+
+  test("the project's folder is served on a port of its own, with the studio's script in every page", async () => {
+    const { project } = await state();
+    assert.equal(project.folder, site);
+    // an empty folder: a page saying so, still in standards mode (the script goes after the doctype)
+    const empty = (await request(project.preview, "GET")).text;
+    assert.match(empty, /^<!doctype html><script>/i);
+    assert.match(empty, /no index\.html yet/);
+    writeFileSync(path.join(site, "index.html"), "<!doctype html><html><head><title>T</title></head><body><p>hi</p></body></html>");
+    const page = (await request(project.preview, "GET")).text;
+    assert.match(page, /<head><script>[\s\S]*__studio\/reload[\s\S]*<\/script><title>T<\/title>/);
+    // nothing outside the folder
+    for (const p of ["..%2f..%2fpackage.json", "%2e%2e/%2e%2e/package.json"]) {
+      assert.notEqual((await request(project.preview + p, "GET")).status, 200, p);
+    }
+    assert.equal((await request(project.preview + "missing.css", "GET")).status, 404);
+  });
+
+  test("a change in the folder reloads the page; one in node_modules or a dot folder doesn't", async () => {
+    await request(`${url}/studio/open`, "POST", { folder: other });
+    const { preview } = (await state()).project;
+    assert.equal(await reloads(preview, () => writeFileSync(path.join(other, "node_modules", "x.js"), "1")), false);
+    mkdirSync(path.join(other, ".claude"), { recursive: true });
+    assert.equal(await reloads(preview, () => writeFileSync(path.join(other, ".claude", "x.json"), "{}")), false);
+    assert.equal(await reloads(preview, () => writeFileSync(path.join(other, "style.css"), "p{}")), true);
+    await request(`${url}/studio/open`, "POST", { folder: site });
+  });
+
+  test("opening something that isn't a folder says so, and keeps the project open", async () => {
+    const r = await request(`${url}/studio/open`, "POST", { folder: path.join(home, "nope") });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error, /is not a folder/);
+    assert.equal((await state()).project.folder, site);
+    assert.deepEqual((await state()).recent.slice(0, 2), [site, other]);
+  });
+
+  test("show_in_preview only takes addresses on this computer", async () => {
+    assert.match(await call(url, "show_in_preview", { url: "https://example.com" }, "error"), /localhost/);
+  });
+
+  test("in the browser: the page runs beside the sidebar, its errors show up, and the agent can change what it shows", { skip: browser ? false : "no Chrome, Edge or Playwright Chromium on this machine" }, async () => {
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } });
+    page.setDefaultTimeout(10_000);
+    await page.goto(url + "/");
+    const view = page.frameLocator("#view");
+    await view.getByText("hi").waitFor();
+    assert.equal(await page.locator("#name").textContent(), "site");
+
+    // a page that throws: the error is counted, listed, and gone once the page loads clean
+    writeFileSync(path.join(site, "index.html"), "<!doctype html><html><head><title>T</title></head><body><p>broken</p><script>nothere()</script></body></html>");
+    await view.getByText("broken").waitFor();
+    await page.locator("#errors-btn", { hasText: "1 error" }).waitFor();
+    await page.locator("#errors-btn").click();
+    assert.match((await page.locator("#errors li").textContent())!, /nothere is not defined/);
+    writeFileSync(path.join(site, "index.html"), "<!doctype html><html><head><title>T</title></head><body><p>fixed</p></body></html>");
+    await view.getByText("fixed").waitFor();
+    await page.locator("#errors-btn").waitFor({ state: "hidden" });
+
+    // the agent points the main area at another page of the project
+    writeFileSync(path.join(site, "about.html"), "<!doctype html><title>About</title><p>about us</p>");
+    assert.match(await call(url, "show_in_preview", { url: "/about.html" }), /about\.html/);
+    await view.getByText("about us").waitFor();
+    assert.match(await page.locator("#address").inputValue(), /\/about\.html$/);
+
+    // switching folders from the start screen
+    await page.locator("#switch").click();
+    await page.locator("#recent button", { hasText: "other" }).click();
+    await page.locator("#name", { hasText: "other" }).waitFor();
+    await view.getByText("no index.html yet").waitFor();
+
+    for (const width of [1280, 900, 600]) {
+      await page.setViewportSize({ width, height: 800 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${width}px`);
+    }
+    await request(`${url}/studio/open`, "POST", { folder: site });
+    await page.close();
   });
 });

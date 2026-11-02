@@ -343,7 +343,14 @@ CI 在 Windows、macOS、Linux 三个系统、Node 22 和 24 上都跑一遍。
 - `examples/hello`：用 TypeScript 写的笔记示例（`npm run hello`）
 - `examples/grill-me`：给一个只能在终端里用的热门 skill（Matt Pocock 的 `grilling`）配上界面：agent
   把每一轮问题放进表单，用户的决定长成一棵树（`npm run grill`）
+- `examples/blank`：只有侧边栏，主区域是空的，用来试 skillframe 本身（`npm run blank`）
+- `examples/studio`：在 skillframe 里开发应用。打开一个项目文件夹，agent 在里面干活，项目的页面就在
+  聊天旁边运行；文件一改页面自动刷新，页面报的错会一起告诉 agent（`npm run studio -- <文件夹>`）
 - `examples/electron`：同一个侧边栏放进 Electron 窗口（`cd examples/electron && npm install && npm start`）
+
+在 Windows 上，`npm run exe` 会在仓库文件夹里生成 `skillframe.exe`、`skillframe Studio.exe`、
+`Grill Me.exe` 和 `Hello Notes.exe`。双击即可在独立窗口里打开对应的例子，不用开终端；关掉窗口，例子也就停了。
+它们需要装好 Node.js、跑过 `npm install`，并且要留在仓库文件夹里。
 
 ## 路线图
 

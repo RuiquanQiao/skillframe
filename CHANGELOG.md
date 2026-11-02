@@ -10,6 +10,13 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
   table too wide for the sidebar scrolls sideways inside the reply.
 - New example: `examples/grill-me` (`npm run grill`), the terminal-only `grilling` skill given a
   screen with a question form and a design tree.
+- New example: `examples/blank` (`npm run blank`), only the sidebar next to an empty main area.
+- New example: `examples/studio` (`npm run studio -- <folder>`), for building an app inside
+  skillframe: the agent works in the project folder, the project's page runs beside the chat and
+  reloads when a file changes, and the page's errors reach the agent.
+- Repository only: `npm run exe` builds `skillframe.exe`, `skillframe Studio.exe`, `Grill Me.exe`
+  and `Hello Notes.exe` (Windows), which open an example in a window of its own and stop it when
+  the window closes. In Studio's window, "Restart server" rebuilds and restarts it in place.
 
 ## create-skillframe 0.1.3 (2026-11-02)
 
