@@ -522,6 +522,8 @@ class SkillframeChat extends HTMLElement {
 
   async open(chatId, quiet) {
     const r = await this.api("GET", `/chats/${chatId}`);
+    // a quiet refresh that comes back after the user moved to another chat would take them back
+    if (quiet && chatId !== this.state.chatId) return;
     this.state.chatId = chatId;
     this.state.meta = r.meta;
     this.state.messages = r.messages;

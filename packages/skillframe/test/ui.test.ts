@@ -246,6 +246,32 @@ describe("the sidebar in a browser", async () => {
     await page.close();
   });
 
+  test("a refresh that lands after the user switched chats doesn't switch them back", { skip: !browser }, async () => {
+    const { page } = await open("codex");
+    await say(page, "hello");
+    await idle(page);
+    const shown = await page.evaluate(async () => {
+      const chat = document.querySelector("skillframe-chat") as any;
+      // the quiet refresh a finished reply starts, answered only after the user picks another agent
+      const api = chat.api.bind(chat);
+      let release!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      chat.api = async (method: string, p: string, body?: unknown) => {
+        const r = await api(method, p, body);
+        if (method === "GET" && p.startsWith("/chats/")) await held;
+        return r;
+      };
+      const refresh = chat.open(chat.state.chatId, true);
+      await chat.pickAgent("claude");
+      release();
+      await refresh;
+      chat.api = api;
+      return chat.state.meta.agent;
+    });
+    assert.equal(shown, "claude");
+    await page.close();
+  });
+
   test("fork from an earlier reply opens a new chat with the conversation up to there", { skip: !browser }, async () => {
     const { page } = await open();
     await say(page, "hello");
