@@ -1,6 +1,6 @@
 {
   "name": "skillframe",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Give your app a sidebar that runs your users' own coding agent (Claude Code, Codex, ACP agents) on their own subscription, wired both ways into your UI.",
   "keywords": [
     "claude-code",

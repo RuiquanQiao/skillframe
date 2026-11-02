@@ -3,11 +3,14 @@
 All notable changes to the `skillframe` and `create-skillframe` packages. Versions follow
 [semantic versioning](https://semver.org); before 1.0, a minor version may change the API.
 
-## Unreleased
+## skillframe 0.1.4 (2026-11-02)
 
-- Fixed: the sidebar showed Markdown tables as raw `| a | b |` lines. Agents use tables often, so
-  they now show as tables, including one written right under a sentence with no blank line. A
-  table too wide for the sidebar scrolls sideways inside the reply.
+- Fixed: the sidebar showed Markdown (GFM) tables as raw `| a | b |` lines. Agents use tables
+  often, so they now show as tables, including one written right under a sentence with no blank
+  line. The `:--`, `:-:` and `--:` alignments are kept, bold, code and links work inside cells, and
+  the leading and trailing `|` of each row are optional. A table too wide for the sidebar scrolls
+  sideways inside the reply. Lines with a `|` but no separator row (`|---|---|`) under them, and
+  a `|` inside a code block or inline code, stay plain text.
 - New example: `examples/grill-me` (`npm run grill`), the terminal-only `grilling` skill given a
   screen with a question form and a design tree.
 - New example: `examples/blank` (`npm run blank`), only the sidebar next to an empty main area.

@@ -263,16 +263,50 @@ export function md(src) {
   return out;
 }
 
-const ROW = /^\s*\|.*\|\s*$/;
-const RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+/** A table line's cells, split on `|` outside inline code (`\|` is a literal one); null with no such `|`. */
+function cells(line) {
+  const s = line.trim();
+  const out = [];
+  let cell = "";
+  let code = false;
+  let pipes = 0;
+  let endsOnPipe = false;
+  for (let i = 0; i < s.length; i++) {
+    endsOnPipe = false;
+    if (s[i] === "\\" && s[i + 1] === "|") {
+      cell += "|";
+      i++;
+    } else if (s[i] === "|" && !code) {
+      out.push(cell.trim());
+      cell = "";
+      pipes++;
+      endsOnPipe = true;
+    } else {
+      if (s[i] === "`") code = !code;
+      cell += s[i];
+    }
+  }
+  if (!pipes) return null;
+  if (!endsOnPipe) out.push(cell.trim());
+  // the leading and trailing `|` are optional
+  if (s.startsWith("|")) out.shift();
+  return out;
+}
+
+/** a header row with a separator row of as many columns under it (`|---|:--:|`) */
+const tableAt = (lines, i) => {
+  const head = cells(lines[i]);
+  const rule = lines[i + 1] === undefined ? null : cells(lines[i + 1]);
+  return !!head?.length && !!rule && rule.length === head.length && rule.every((c) => /^:?-+:?$/.test(c));
+};
 
 function paragraph(lines) {
   // agents often put a table right under a sentence, with no blank line between them
-  const at = lines.findIndex((l, i) => ROW.test(l) && RULE.test(lines[i + 1] ?? ""));
+  const at = lines.findIndex((_, i) => tableAt(lines, i));
   if (at > 0) return paragraph(lines.slice(0, at)) + paragraph(lines.slice(at));
   if (at === 0) {
     let end = 2;
-    while (end < lines.length && ROW.test(lines[end])) end++;
+    while (end < lines.length && cells(lines[end])) end++;
     return table(lines.slice(0, end)) + (end < lines.length ? paragraph(lines.slice(end)) : "");
   }
   if (lines.every((l) => /^\s*[-*] /.test(l))) return "<ul>" + lines.map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("") + "</ul>";
@@ -282,7 +316,6 @@ function paragraph(lines) {
 
 /** A GitHub-style table; a wide one scrolls sideways inside its own box, not the sidebar. */
 function table([head, rule, ...rows]) {
-  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
   const align = cells(rule).map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : ""));
   const td = (tag, c, i) => `<${tag}${align[i] ? ` style="text-align:${align[i]}"` : ""}>${inline(c)}</${tag}>`;
   const width = align.length;
