@@ -359,6 +359,8 @@ Windows, macOS and Linux, on Node 22 and 24.
 - `packages/skillframe`: the library (no runtime dependencies)
 - `packages/create-skillframe`: `npm create skillframe`
 - `examples/hello`: notes, with TypeScript (`npm run hello`)
+- `examples/grill-me`: a popular terminal-only skill (Matt Pocock's `grilling`) given a screen: the
+  agent puts each round of questions in a form and the decisions grow into a tree (`npm run grill`)
 - `examples/electron`: the same sidebar in an Electron window (`cd examples/electron && npm install && npm start`)
 
 ## Roadmap

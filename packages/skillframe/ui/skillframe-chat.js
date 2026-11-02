@@ -166,6 +166,10 @@ button { cursor: pointer; }
 .md pre { background: var(--sf-soft); padding: 8px 10px; border-radius: 4px; overflow-x: auto; }
 .md pre code { background: none; padding: 0; }
 .md a { color: var(--sf-accent); }
+.md .tbl { overflow-x: auto; margin: 0 0 8px; }
+.md table { border-collapse: collapse; font-size: 12px; }
+.md th, .md td { border: 1px solid var(--sf-line); padding: 3px 8px; vertical-align: top; min-width: 3em; }
+.md th { background: var(--sf-soft); font-weight: 600; white-space: nowrap; }
 details.think { color: var(--sf-muted); }
 details.think summary { cursor: pointer; width: fit-content; }
 details.think .md { padding: 4px 0 0 12px; border-left: 1px solid var(--sf-line); margin-top: 4px; white-space: pre-wrap; }
@@ -253,13 +257,37 @@ export function md(src) {
     }
     for (const para of part.split(/\n{2,}/)) {
       if (!para.trim()) continue;
-      const lines = para.split("\n");
-      if (lines.every((l) => /^\s*[-*] /.test(l))) out += "<ul>" + lines.map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("") + "</ul>";
-      else if (lines.every((l) => /^\s*\d+[.)] /.test(l))) out += "<ol>" + lines.map((l) => `<li>${inline(l.replace(/^\s*\d+[.)] /, ""))}</li>`).join("") + "</ol>";
-      else out += `<p>${lines.map(inline).join("<br>")}</p>`;
+      out += paragraph(para.split("\n"));
     }
   }
   return out;
+}
+
+const ROW = /^\s*\|.*\|\s*$/;
+const RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+
+function paragraph(lines) {
+  // agents often put a table right under a sentence, with no blank line between them
+  const at = lines.findIndex((l, i) => ROW.test(l) && RULE.test(lines[i + 1] ?? ""));
+  if (at > 0) return paragraph(lines.slice(0, at)) + paragraph(lines.slice(at));
+  if (at === 0) {
+    let end = 2;
+    while (end < lines.length && ROW.test(lines[end])) end++;
+    return table(lines.slice(0, end)) + (end < lines.length ? paragraph(lines.slice(end)) : "");
+  }
+  if (lines.every((l) => /^\s*[-*] /.test(l))) return "<ul>" + lines.map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("") + "</ul>";
+  if (lines.every((l) => /^\s*\d+[.)] /.test(l))) return "<ol>" + lines.map((l) => `<li>${inline(l.replace(/^\s*\d+[.)] /, ""))}</li>`).join("") + "</ol>";
+  return `<p>${lines.map(inline).join("<br>")}</p>`;
+}
+
+/** A GitHub-style table; a wide one scrolls sideways inside its own box, not the sidebar. */
+function table([head, rule, ...rows]) {
+  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+  const align = cells(rule).map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : ""));
+  const td = (tag, c, i) => `<${tag}${align[i] ? ` style="text-align:${align[i]}"` : ""}>${inline(c)}</${tag}>`;
+  const width = align.length;
+  const row = (l, tag) => "<tr>" + cells(l).slice(0, width).concat(Array(width).fill("")).slice(0, width).map((c, i) => td(tag, c, i)).join("") + "</tr>";
+  return `<div class="tbl"><table><thead>${row(head, "th")}</thead><tbody>${rows.map((l) => row(l, "td")).join("")}</tbody></table></div>`;
 }
 
 function inline(s) {

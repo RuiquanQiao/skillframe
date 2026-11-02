@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grill Me</title>
+  <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper: #f4f6f9; --surface: #ffffff; --ink: #1e2638; --muted: #5d6779; --line: #d6dce6;
+      --settled: #2f7a57; --open: #a86a12; --accent: #2f5bd3; --accent-ink: #ffffff; --wash: #e8eefb;
+      font: 14px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #161a22; --surface: #1d222c; --ink: #e3e7ee; --muted: #9aa3b2; --line: #313846;
+        --settled: #5cbf8d; --open: #e0a64a; --accent: #7d9cf0; --accent-ink: #10141c; --wash: #222a3b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(240px, 300px); background: var(--paper); color: var(--ink); }
+    skillframe-chat { border-right: 1px solid var(--line); min-height: 0; background: var(--surface); }
+    button, input, textarea { font: inherit; color: inherit; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    main { overflow: auto; padding: 28px 36px 0; min-width: 0; }
+    .col { max-width: 68ch; }
+    h1 { font-size: 22px; line-height: 1.3; margin: 0 0 6px; font-weight: 650; overflow-wrap: anywhere; }
+    .lede { color: var(--muted); margin: 0 0 24px; }
+
+    /* start */
+    #idea { width: 100%; min-height: 140px; resize: vertical; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+    .primary { border: 0; border-radius: 6px; padding: 8px 16px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+    .primary:disabled { opacity: .45; cursor: default; }
+    .quiet { border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; background: transparent; cursor: pointer; }
+    .quiet:hover { background: var(--wash); }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+
+    /* a round */
+    .q { padding: 18px 0 20px; border-top: 1px solid var(--line); }
+    .q:first-of-type { border-top: 0; padding-top: 4px; }
+    .q h2 { font-size: 15px; margin: 0 0 6px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; overflow-wrap: anywhere; }
+    .q h2 .id { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; flex: none; }
+    .q .body { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .rec { background: var(--wash); border-radius: 6px; padding: 8px 12px; margin: 0 0 10px; overflow-wrap: anywhere; }
+    .rec b { font-weight: 600; }
+    .choices { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+    .choice { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; cursor: pointer; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+    .choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+    .q input[type=text] { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+    .q.answered h2 .id { color: var(--settled); }
+
+    .bar { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 12px 0 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .bar .count { color: var(--muted); flex: 1; min-width: 12ch; }
+    #status { color: var(--muted); min-height: 1.5em; margin: 8px 0 0; }
+
+    /* a settled question opened from the tree */
+    .detail dl { margin: 0 0 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; }
+    .detail dt { color: var(--muted); }
+    .detail dd { margin: 0; overflow-wrap: anywhere; }
+
+    /* the summary */
+    .summary { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 20px; overflow-wrap: anywhere; }
+    .summary table { border-collapse: collapse; } .summary td, .summary th { border: 1px solid var(--line); padding: 3px 8px; }
+    .done { color: var(--settled); font-weight: 600; }
+
+    /* the design tree */
+    aside { border-left: 1px solid var(--line); overflow: auto; padding: 28px 18px; min-width: 0; }
+    aside h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+    aside .sub { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+    .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+    .tree ul { margin-left: 9px; padding-left: 14px; border-left: 1px solid var(--line); }
+    .tree li { position: relative; }
+    .tree ul > li::before { content: ""; position: absolute; left: -14px; top: 15px; width: 10px; border-top: 1px solid var(--line); }
+    .node { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 0 8px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+    .node:hover, .node[aria-current="true"] { background: var(--wash); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; border: 2px solid var(--open); }
+    .settled > .node .dot { background: var(--settled); border-color: var(--settled); }
+    .answered > .node .dot { border-color: var(--settled); }
+    .node .t { font-size: 13px; overflow-wrap: anywhere; }
+    .node .d { grid-column: 2; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    .tree .new > .node { animation: grow 1.4s ease-out; }
+    @keyframes grow { from { background: color-mix(in srgb, var(--open) 30%, transparent); } }
+    @media (prefers-reduced-motion: reduce) { .tree .new > .node { animation: none; } }
+
+    @media (max-width: 1100px) {
+      body { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+      skillframe-chat { grid-row: 1 / 3; }
+      aside { border-left: 0; border-top: 1px solid var(--line); max-height: 34vh; padding: 16px 36px; }
+    }
+    @media (max-width: 720px) {
+      body { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 60vh auto auto; }
+      skillframe-chat { grid-row: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      main { padding: 20px 16px 0; overflow: visible; }
+      aside { max-height: none; padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- lang: this page's own words are English, so the sidebar's are too -->
+  <skillframe-chat endpoint="/sf" lang="en"></skillframe-chat>
+  <main><div class="col" id="view"></div></main>
+  <aside aria-label="Design tree">
+    <h2>Design tree</h2>
+    <p class="sub" id="tally">Each question becomes a branch here.</p>
+    <ul class="tree" id="tree"></ul>
+  </aside>
+  <script type="module">
+    import { md } from "/sf/ui/skillframe-chat.js";
+
+    const chat = document.querySelector("skillframe-chat");
+    const view = document.getElementById("view");
+    const treeEl = document.getElementById("tree");
+    let file = { text: "", hash: "" };      // grill.json as last read, with its version
+    let g = { idea: "", questions: [], summary: null, confirmed: false };
+    const drafts = new Map();                // question id -> the answer being written
+    let opened = null;                       // a question opened from the tree
+    let busy = false;                        // a turn this page started is running
+    let seen = null;                         // question ids already drawn (new ones flash once; none on the first draw)
+    let status = "";
+
+    const h = (tag, attrs = {}, ...kids) => {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (v == null || v === false) continue;
+        if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+        else if (k === "html") el.innerHTML = v;
+        else el.setAttribute(k, v === true ? "" : v);
+      }
+      el.append(...kids.flat().filter((k) => k != null && k !== false));
+      return el;
+    };
+
+    async function load() {
+      file = await (await fetch("/sf/files?path=grill.json")).json();
+      try { g = { idea: "", questions: [], summary: null, confirmed: false, ...JSON.parse(file.text) }; } catch {}
+      draw();
+    }
+
+    /** change grill.json on top of the version shown; if the agent wrote it meanwhile, apply the change to its version */
+    async function save(change) {
+      for (let tries = 0; tries < 3; tries++) {
+        let next;
+        try { next = JSON.parse(file.text); } catch { next = { idea: "", questions: [] }; }
+        change(next);
+        const res = await fetch("/sf/files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: "grill.json", text: JSON.stringify(next, null, 2) + "\n", baseHash: file.hash }),
+        });
+        if (res.status === 409) { file = (await res.json()).current; continue; }
+        if (!res.ok) throw new Error(await res.text());
+        return load();
+      }
+      throw new Error("grill.json keeps changing. Try again.");
+    }
+
+    async function send(prompt, shown) {
+      busy = true;
+      draw();
+      try { await chat.ask({ prompt, shown }); } finally { busy = false; status = ""; draw(); }
+    }
+
+    // ---- what the agent is asking now -------------------------------------------------------
+    const open = () => g.questions.filter((q) => !q.decision && !q.answer);
+    const waiting = () => g.questions.filter((q) => q.answer && !q.decision);
+
+    function draw() {
+      drawTree();
+      if (!g.idea) return drawStart();
+      if (opened) return drawDetail(g.questions.find((q) => q.id === opened));
+      if (open().length) return drawRound();
+      if (g.summary) return drawSummary();
+      view.replaceChildren(
+        h("h1", {}, g.idea),
+        h("p", { class: "lede" }, busy || waiting().length ? "The agent is working out the next questions." : "No open questions. Ask the agent in the chat to go on, or start over."),
+        startOver(),
+      );
+    }
+
+    function drawStart() {
+      const box = h("textarea", { id: "idea", placeholder: "A loose idea is enough: a feature, a product, a business call, something you're writing…", "aria-label": "Your idea" });
+      const go = h("button", { class: "primary", disabled: true, onclick: async () => {
+        const idea = box.value.trim();
+        await save((x) => Object.assign(x, { idea, questions: [], summary: null, confirmed: false }));
+        await send(`Use the grilling skill (.claude/skills/grilling/SKILL.md in your working folder) to grill me on this idea:\n\n${idea}`, idea);
+      } }, "Start grilling");
+      box.oninput = () => (go.disabled = !box.value.trim());
+      view.replaceChildren(
+        h("h1", {}, "What do you want to think through?"),
+        h("p", { class: "lede" }, "The agent asks in rounds, each with its recommended answer. You decide; the design tree shows what's settled and what's left."),
+        box,
+        h("div", { class: "row" }, go),
+      );
+    }
+
+    function drawRound() {
+      const qs = open();
+      const round = Math.max(...qs.map((q) => q.round));
+      const cards = qs.map((q) => {
+        const answer = drafts.get(q.id) ?? "";
+        const choose = (text) => { drafts.set(q.id, text); draw(); };
+        const pick = (label, text) => h("button", { class: "choice", "aria-pressed": String(answer === text), onclick: () => choose(text) }, label);
+        const own = h("input", { type: "text", placeholder: "Or write your own answer", "aria-label": `Your answer to ${q.id}`,
+          value: [`Yes: ${q.recommended}`, "Not sure", ...q.options].includes(answer) ? "" : answer });
+        // typing updates this card in place: a redraw would eat the click on "Send answers"
+        own.oninput = () => {
+          drafts.set(q.id, own.value);
+          card.classList.toggle("answered", !!own.value.trim());
+          for (const b of card.querySelectorAll(".choice")) b.setAttribute("aria-pressed", "false");
+          count();
+        };
+        const card = h("section", { class: `q${answer.trim() ? " answered" : ""}`, onfocusin: () => chat.setScreen({ question: q.id }) },
+          h("h2", {}, h("span", { class: "id" }, q.id), h("span", {}, q.title)),
+          q.body ? h("p", { class: "body" }, q.body) : null,
+          q.recommended ? h("p", { class: "rec" }, h("b", {}, "Recommended: "), q.recommended) : null,
+          h("div", { class: "choices" },
+            q.recommended ? pick("Yes", `Yes: ${q.recommended}`) : null,
+            q.options.map((o) => pick(o, o)),
+            pick("Not sure", "Not sure")),
+          own);
+        return card;
+      });
+      const counter = h("span", { class: "count" });
+      const submit = h("button", { class: "primary", onclick: sendRound }, "Send answers");
+      function count() {
+        const n = qs.filter((q) => (drafts.get(q.id) ?? "").trim()).length;
+        counter.textContent = busy ? "The agent is busy. Send when it's done." : `${n} of ${qs.length} answered`;
+        submit.disabled = busy || !n;
+      }
+      count();
+      view.replaceChildren(
+        h("h1", {}, g.idea),
+        h("p", { class: "lede" }, `Round ${round}. Answer what you can; anything left blank is asked again next round.`),
+        ...cards,
+        h("div", { class: "bar" }, counter, submit),
+        h("p", { id: "status", role: "status" }, status),
+      );
+
+      async function sendRound() {
+        const answers = qs.map((q) => [q, (drafts.get(q.id) ?? "").trim()]).filter(([, a]) => a);
+        await save((x) => { for (const [q, a] of answers) { const t = x.questions.find((y) => y.id === q.id); if (t) t.answer = a; } });
+        for (const [q] of answers) drafts.delete(q.id);
+        const lines = answers.map(([q, a]) => `${q.id} (${q.title}): ${a}`).join("\n");
+        await send(`My answers to round ${round}:\n${lines}\n\nSettle each one, then ask the next round with ask_round, or call finish if the frontier is empty.`, `Answers to round ${round}:\n${lines}`);
+      }
+    }
+
+    function drawDetail(q) {
+      if (!q) { opened = null; return draw(); }
+      const box = h("input", { type: "text", value: q.answer ?? "", "aria-label": "Your answer" });
+      view.replaceChildren(
+        h("p", {}, h("button", { class: "quiet", onclick: () => { opened = null; draw(); } }, "Back to the questions")),
+        h("section", { class: "q detail" },
+          h("h2", {}, h("span", { class: "id" }, q.id), h("span", {}, q.title)),
+          q.body ? h("p", { class: "body" }, q.body) : null,
+          h("dl", {},
+            h("dt", {}, "Recommended"), h("dd", {}, q.recommended || "—"),
+            h("dt", {}, "You said"), h("dd", {}, q.answer ?? "Not answered yet"),
+            h("dt", {}, "Decision"), h("dd", {}, q.decision ?? "Not settled yet")),
+          q.answer ? h("div", {},
+            box,
+            h("div", { class: "row" }, h("button", { class: "primary", disabled: busy, onclick: async () => {
+              const a = box.value.trim();
+              if (!a || a === q.answer) return;
+              await save((x) => { const t = x.questions.find((y) => y.id === q.id); if (t) t.answer = a; });
+              opened = null;
+              await send(`I changed my answer to ${q.id} (${q.title}) to: ${a}\n\nSettle it again and reconsider the questions that hang off it.`, `New answer to ${q.id}: ${a}`);
+            } }, "Change answer"))) : null),
+      );
+    }
+
+    function drawSummary() {
+      view.replaceChildren(
+        h("h1", {}, g.idea),
+        h("p", { class: "lede" }, g.confirmed ? "You confirmed this is where you both ended up." : "Every branch is settled. Read it through: is this what you decided?"),
+        h("div", { class: "summary", html: md(g.summary) }),
+        h("div", { class: "row" },
+          g.confirmed ? h("span", { class: "done" }, "Confirmed") :
+            h("button", { class: "primary", disabled: busy, onclick: async () => {
+              await save((x) => (x.confirmed = true));
+              await send("I confirm: this is our shared understanding.", "Confirmed");
+            } }, "Confirm"),
+          startOver()),
+      );
+    }
+
+    function startOver() {
+      return h("button", { class: "quiet", disabled: busy, onclick: async () => {
+        if (!confirm("Start over with a new idea? The questions and answers here are cleared.")) return;
+        drafts.clear(); opened = null;
+        await save((x) => Object.assign(x, { idea: "", questions: [], summary: null, confirmed: false }));
+        await chat.newChat();
+      } }, "Start over");
+    }
+
+    // ---- the design tree --------------------------------------------------------------------
+    function drawTree() {
+      const settled = g.questions.filter((q) => q.decision).length;
+      document.getElementById("tally").textContent = g.questions.length
+        ? `${settled} of ${g.questions.length} settled`
+        : "Each question becomes a branch here.";
+      const kids = (id) => g.questions.filter((q) => (q.parent ?? null) === id);
+      const branch = (q) => {
+        const state = q.decision ? "settled" : q.answer ? "answered" : "open";
+        const li = h("li", { class: `${state}${!seen || seen.has(q.id) ? "" : " new"}` },
+          h("button", { class: "node", "aria-current": String(opened === q.id), title: `${q.id}: ${state}`, onclick: () => { opened = q.id; chat.setScreen({ question: q.id }); draw(); } },
+            h("span", { class: "dot", "aria-hidden": "true" }),
+            h("span", { class: "t" }, `${q.id} ${q.title}`),
+            q.decision ? h("span", { class: "d" }, q.decision) : null));
+        const sub = kids(q.id);
+        if (sub.length) li.append(h("ul", {}, sub.map(branch)));
+        return li;
+      };
+      treeEl.replaceChildren(...kids(null).map(branch));
+      if (file.hash) seen = new Set(g.questions.map((q) => q.id));
+    }
+
+    // the agent changed grill.json (a new round, a settled decision): redraw
+    chat.addEventListener("file-changed", (e) => {
+      if (e.detail.path === "grill.json" && e.detail.hash !== file.hash) load();
+    });
+    load();
+  </script>
+</body>
+</html>

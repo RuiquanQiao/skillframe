@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { chromium, type Browser } from "playwright-core";
 import type { Skillframe } from "../src/index.js";
 
 export const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -22,6 +23,18 @@ export function tmpDir(name: string): string {
   const dir = path.join(TMP, `${name}-${process.pid}-${Math.random().toString(36).slice(2, 7)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/** the Chrome or Edge already on the machine, headless; null when there is none */
+export async function launchBrowser(): Promise<Browser | null> {
+  for (const channel of ["chrome", "msedge", undefined]) {
+    try {
+      return await chromium.launch({ channel, headless: true });
+    } catch {
+      /* try the next browser */
+    }
+  }
+  return null;
 }
 
 /** a raw HTTP client: fetch() won't let a test set Host or Origin freely */

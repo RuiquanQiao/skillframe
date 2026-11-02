@@ -70,6 +70,14 @@ async function reply(text, content) {
     say(`Here: https://example.com/${"a".repeat(300)}?q=${"b".repeat(100)} and ${long}\n\n\`\`\`\n${"y".repeat(500)}\n\`\`\``);
     return done("long");
   }
+  if (text === "table") {
+    // the way agents write them: right under a sentence, CJK, and one row wider than any sidebar
+    say(
+      "三个赛道的评分：\n| 赛道 | 自动化 | 风险 |\n|:---|---:|:-:|\n| AI 朗读 `reddit` 故事 | 90 | **高** |\n| a \\| b | 65 | 低 |\n" +
+        `| ${"wide".repeat(60)} | 1 | 2 |\n\nAfter the table.`,
+    );
+    return done("table");
+  }
   if (text === "todo") {
     out({ type: "assistant", session_id: session, uuid: `u-${++n}`, message: { model: "fake-model", content: [{ type: "tool_use", id: "td-1", name: "TodoWrite", input: { todos: [{ content: "Read notes", status: "completed", activeForm: "Reading" }, { content: "Add milk", status: "in_progress", activeForm: "Adding" }] } }] } });
     out({ type: "user", session_id: session, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "td-1", content: "ok" }] } });
@@ -101,13 +109,15 @@ async function reply(text, content) {
     say(answer);
     return done(answer);
   }
-  if (text.startsWith("tool")) {
+  // "tool {args}" calls the app's first tool, "call <name> {args}" the one named
+  if (text.startsWith("tool") || text.startsWith("call ")) {
     const config = JSON.parse(readFileSync(opt("--mcp-config"), "utf8"));
     await mcp(config, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake", version: "1" } } });
     await mcp(config, { jsonrpc: "2.0", method: "notifications/initialized" });
     const list = await mcp(config, { jsonrpc: "2.0", id: 2, method: "tools/list" });
-    const name = list.result.tools[0].name;
-    const args = JSON.parse(text.slice(4).trim() || "{}");
+    const named = text.match(/^call (\S+)\s*([\s\S]*)$/);
+    const name = named ? named[1] : list.result.tools[0].name;
+    const args = JSON.parse((named ? named[2] : text.slice(4)).trim() || "{}");
     out({ type: "assistant", session_id: session, message: { model: "fake-model", content: [{ type: "tool_use", id: "tu-1", name: `mcp__app__${name}`, input: args }] } });
     const call = await mcp(config, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name, arguments: args } });
     const result = call.result.content[0].text;

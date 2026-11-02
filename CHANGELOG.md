@@ -3,6 +3,14 @@
 All notable changes to the `skillframe` and `create-skillframe` packages. Versions follow
 [semantic versioning](https://semver.org); before 1.0, a minor version may change the API.
 
+## Unreleased
+
+- Fixed: the sidebar showed Markdown tables as raw `| a | b |` lines. Agents use tables often, so
+  they now show as tables, including one written right under a sentence with no blank line. A
+  table too wide for the sidebar scrolls sideways inside the reply.
+- New example: `examples/grill-me` (`npm run grill`), the terminal-only `grilling` skill given a
+  screen with a question form and a design tree.
+
 ## create-skillframe 0.1.3 (2026-11-02)
 
 - Fixed: in Windows PowerShell 5.1, `npm create skillframe my-app -- --eject` made an app without

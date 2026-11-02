@@ -4,20 +4,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
-import { chromium, type Browser, type Page } from "playwright-core";
+import type { Page } from "playwright-core";
 import { createSkillframe, type Skillframe } from "../src/index.js";
-import { fakeEnv, PKG, request, tmpDir } from "./helpers.js";
-
-async function launch(): Promise<Browser | null> {
-  for (const channel of ["chrome", "msedge", undefined]) {
-    try {
-      return await chromium.launch({ channel, headless: true });
-    } catch {
-      /* try the next browser */
-    }
-  }
-  return null;
-}
+import { fakeEnv, launchBrowser, PKG, request, tmpDir } from "./helpers.js";
 
 /** everything in the sidebar that sticks out of it, and whether its transcript scrolls sideways */
 async function spills(page: Page) {
@@ -41,7 +30,7 @@ async function spills(page: Page) {
 }
 
 describe("the sidebar in a browser", async () => {
-  const browser = await launch();
+  const browser = await launchBrowser();
   let sf: Skillframe;
   let url: string;
 
@@ -100,6 +89,34 @@ describe("the sidebar in a browser", async () => {
         const s = await spills(page);
         assert.deepEqual(s, { out: [], sideways: false, page: false }, `${width}px ${colorScheme}`);
       }
+    }
+    await page.close();
+  });
+
+  test("a markdown table shows as a table, and a wide one scrolls inside the reply", { skip: !browser }, async () => {
+    const { page } = await open("claude", { width: 320, height: 700 });
+    await say(page, "table");
+    await page.locator("skillframe-chat .md", { hasText: "After the table." }).waitFor();
+    await idle(page);
+    const t = await page.evaluate(() => {
+      const md = [...document.querySelector("skillframe-chat")!.shadowRoot!.querySelectorAll(".md")].find((n) => n.textContent!.includes("After the table."))!;
+      const table = md.querySelector("table");
+      return {
+        before: md.querySelector("p")?.textContent,
+        head: [...(table?.querySelectorAll("th") ?? [])].map((c) => [c.textContent, (c as HTMLElement).style.textAlign]),
+        rows: [...(table?.querySelectorAll("tbody tr") ?? [])].map((r) => [...r.children].map((c) => c.innerHTML)),
+        pipes: md.textContent!.includes("|---"),
+      };
+    });
+    assert.equal(t.before, "三个赛道的评分：");
+    assert.deepEqual(t.head, [["赛道", "left"], ["自动化", "right"], ["风险", "center"]]);
+    assert.deepEqual(t.rows[0], ["AI 朗读 <code>reddit</code> 故事", "90", "<strong>高</strong>"]);
+    assert.deepEqual(t.rows[1], ["a | b", "65", "低"]);
+    assert.equal(t.rows.length, 3);
+    assert.equal(t.pipes, false);
+    for (const width of [320, 800]) {
+      await page.setViewportSize({ width, height: 700 });
+      assert.deepEqual(await spills(page), { out: [], sideways: false, page: false }, `${width}px`);
     }
     await page.close();
   });

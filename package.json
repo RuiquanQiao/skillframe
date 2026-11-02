@@ -4,12 +4,14 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "examples/hello"
+    "examples/hello",
+    "examples/grill-me"
   ],
   "scripts": {
     "build": "tsc -b packages/skillframe examples/hello",
     "test": "tsc -b packages/skillframe && node packages/skillframe/dist/test/run.js",
-    "hello": "tsc -b packages/skillframe examples/hello && node examples/hello/dist/server.js"
+    "hello": "tsc -b packages/skillframe examples/hello && node examples/hello/dist/server.js",
+    "grill": "tsc -b packages/skillframe && node examples/grill-me/server.js"
   },
   "engines": {
     "node": ">=22"

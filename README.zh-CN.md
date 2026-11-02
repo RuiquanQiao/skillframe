@@ -341,6 +341,8 @@ CI 在 Windows、macOS、Linux 三个系统、Node 22 和 24 上都跑一遍。
 - `packages/skillframe`：库本身（零运行时依赖）
 - `packages/create-skillframe`：`npm create skillframe`
 - `examples/hello`：用 TypeScript 写的笔记示例（`npm run hello`）
+- `examples/grill-me`：给一个只能在终端里用的热门 skill（Matt Pocock 的 `grilling`）配上界面：agent
+  把每一轮问题放进表单，用户的决定长成一棵树（`npm run grill`）
 - `examples/electron`：同一个侧边栏放进 Electron 窗口（`cd examples/electron && npm install && npm start`）
 
 ## 路线图
