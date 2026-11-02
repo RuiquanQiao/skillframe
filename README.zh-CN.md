@@ -19,6 +19,7 @@
   <a href="#接进你的-app">接进你的 app</a> ·
   <a href="#原理">原理</a> ·
   <a href="docs/PROTOCOL.md">协议</a> ·
+  <a href="#和类似项目的区别">和类似项目的区别</a> ·
   <a href="#常见问题">常见问题</a> ·
   <a href="README.md">English</a>
 </p>
@@ -26,6 +27,10 @@
 skillframe 给你的 app 加一个侧边栏，里面跑的是**用户自己的 coding agent**：Claude Code、Codex，
 或者任何支持 [Agent Client Protocol](https://agentclientprotocol.com)（ACP）的 agent，比如 Qwen Code。
 用的是**用户自己的**订阅额度，而且和你的界面双向联动。
+
+不用 API key，你也不用为 token 付钱：这是一个给 Electron、Tauri 和本地 web app 用的 AI 侧边栏，
+跑的是用户自己的 Claude Code 或 Codex 订阅。想知道它和各种 agent SDK 有什么区别，见
+[和类似项目的区别](#和类似项目的区别)。
 
 <p align="center">
   <img alt="演示：skillframe 只占左边的侧边栏；侧边栏里的 agent 往右边的示例 app 里加待办，接着换 Codex 再加一条" src="https://raw.githubusercontent.com/RuiquanQiao/skillframe/main/docs/media/skillframe-demo.gif" width="800">
@@ -208,6 +213,19 @@ Tauri 和普通浏览器窗口也是同样的做法。
 [docs/PROTOCOL.md](docs/PROTOCOL.md)，所以用别的语言写后端也能驱动同一个侧边栏。
 
 本地服务器只响应自己的页面：只接受本机 Host 名、只接受同源的 JSON 请求，工具接口还要 token。
+
+## 和类似项目的区别
+
+skillframe 自己不调用任何模型。它启动的是用户已经装好、已经登录的 coding agent，再给你的 app
+一个现成的侧边栏。下面这些项目解决的是相近的问题；每一行写清它做什么、skillframe 多做了什么。
+（2026-11-02 对照各项目自己的文档核实。）
+
+| 项目 | 它做什么 | skillframe 的不同 |
+|---|---|---|
+| [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)（`@anthropic-ai/claude-agent-sdk`） | Python 和 TypeScript 库，在你自己的进程里跑 Claude Code 的 agent 循环。Anthropic 文档写明：用它做的产品应当用 API key 认证，未经 Anthropic 批准不能让用户用 claude.ai 账号登录。不带界面。 | 启动用户自己装的、未经修改的 `claude` 命令，用用户自己的登录（见[常见问题](#常见问题)），另外还支持 Codex 和 ACP agent。自带侧边栏：回复、权限/提问/计划卡片、agent 和模型选择。 |
+| [Vercel AI SDK](https://ai-sdk.dev)（`ai`） | 调用模型 API 的 TypeScript 工具包，带 `useChat` 等聊天界面 hook。官方 provider 用你的 API key 认证（Anthropic provider 读 `ANTHROPIC_API_KEY`）。agent 的工具和聊天界面要你自己写。 | 没有模型 API，也没有 key：侧边栏里是一个完整的 coding agent，本来就会读文件、跑命令、加载它自己的 skill。你的 app 只需把自己的函数加成工具，侧边栏界面是现成的。 |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router)（`@musistudio/claude-code-router`） | 本地模型网关：把 Claude Code 的模型请求转给别的厂商（OpenRouter、DeepSeek、Moonshot 等），用你填的 API key。有自己的桌面 app 和网页管理界面，不是能嵌进别人 app 的组件。 | 不在同一层。Claude Code Router 改的是 agent 的模型请求发到哪；skillframe 是把 agent 放进你 app 的窗口，并和你的界面联动。 |
+| [cligent](https://github.com/sublang-dev/cligent)（`@sublang/cligent`） | 一个 TypeScript SDK、一条事件流，统一调用多个 coding agent CLI：Claude Code（经由 Claude Agent SDK）、Codex、Gemini CLI、Kimi Code、OpenCode。用各 CLI 自己的登录或 API key。库本身不带界面。 | 自带界面；用一个 MCP 服务器把你 app 的工具提供给所有 agent；监听共享文件并检测冲突；告诉 agent 用户屏幕上是什么。目前 cligent 支持的 agent 更多。 |
 
 ## 常见问题
 

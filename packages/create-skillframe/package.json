@@ -1,8 +1,13 @@
 {
   "name": "create-skillframe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Start an app with a sidebar that runs your users' own coding agent: npm create skillframe my-app",
-  "keywords": ["skillframe", "create", "scaffold", "claude-code", "codex"],
+  "keywords": [
+    "skillframe", "create", "create-app", "scaffold", "starter", "template",
+    "claude-code", "codex", "claude", "coding-agent", "agent", "acp", "mcp",
+    "sidebar", "ai-sidebar", "agent-ui", "chat-ui", "no-api-key", "subscription",
+    "bring-your-own-agent", "local-agent", "electron"
+  ],
   "author": "Ruiquan Qiao",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/RuiquanQiao/skillframe.git", "directory": "packages/create-skillframe" },

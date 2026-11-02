@@ -19,6 +19,7 @@
   <a href="#use-it-in-your-app">Use it in your app</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="docs/PROTOCOL.md">Protocol</a> ·
+  <a href="#how-it-compares">How it compares</a> ·
   <a href="#faq">FAQ</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
@@ -26,6 +27,10 @@
 skillframe gives your app a sidebar that runs **your users' own coding agent**: Claude Code, Codex,
 or any agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) (such as Qwen
 Code). It runs on **their** subscription, and it is wired both ways into your UI.
+
+No API key and no token bill for you: an AI sidebar for Electron, Tauri and local web apps that
+uses your users' Claude Code or Codex subscription. Not sure how that differs from an agent SDK?
+See [How it compares](#how-it-compares).
 
 <p align="center">
   <img alt="The demo: skillframe is only the sidebar; the agent in it adds todos to an example app on the right, then Codex does too" src="https://raw.githubusercontent.com/RuiquanQiao/skillframe/main/docs/media/skillframe-demo.gif" width="800">
@@ -216,6 +221,20 @@ describes it, so a backend in another language can drive the same sidebar.
 
 The local server answers only its own page: it accepts loopback Host names only, same-origin JSON
 requests only, and a token for the tools.
+
+## How it compares
+
+skillframe makes no model calls of its own. It starts the coding agent the user already installed
+and signed in to, and gives your app a ready-made sidebar for it. The projects below solve nearby
+problems; each row says what that project does and what skillframe does on top. (Checked against
+each project's own docs on 2026-11-02.)
+
+| Project | What it does | What skillframe does differently |
+|---|---|---|
+| [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) (`@anthropic-ai/claude-agent-sdk`) | A Python and TypeScript library that runs Claude Code's agent loop inside your own process. Anthropic's docs say products built on it should use API key authentication and may not offer claude.ai login to their users without Anthropic's approval. No UI. | Starts the user's own, unmodified `claude` command on the user's own sign-in (see the [FAQ](#faq)), and also Codex and ACP agents. Comes with the sidebar: replies, permission, question and plan cards, agent and model pickers. |
+| [Vercel AI SDK](https://ai-sdk.dev) (`ai`) | A TypeScript toolkit for calling model APIs, with chat UI hooks such as `useChat`. Its official providers authenticate with your API key (the Anthropic provider reads `ANTHROPIC_API_KEY`). You write the agent's tools and the chat UI. | No model API and no key: the agent in the sidebar is a full coding agent that already reads files, runs commands and loads its own skills. Your app adds its functions as tools; the sidebar UI is built. |
+| [Claude Code Router](https://github.com/musistudio/claude-code-router) (`@musistudio/claude-code-router`) | A local model gateway: it sends Claude Code's model requests to other providers (OpenRouter, DeepSeek, Moonshot and more) with API keys you enter. It has its own desktop app and a web management UI, not a component to embed. | A different layer. Claude Code Router changes where the agent's model calls go; skillframe puts the agent into your app's window and wires it to your UI. |
+| [cligent](https://github.com/sublang-dev/cligent) (`@sublang/cligent`) | One TypeScript SDK and event stream for several coding agent CLIs: Claude Code (through the Claude Agent SDK), Codex, Gemini CLI, Kimi Code, OpenCode. It uses each CLI's own sign-in or API key. The library has no UI. | Ships the UI, serves your app's tools to every agent over one MCP server, shares watched files with conflict detection, and tells the agent what's on screen. cligent supports more agents today. |
 
 ## FAQ
 

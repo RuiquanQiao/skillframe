@@ -1,6 +1,6 @@
 {
   "name": "skillframe",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Give your app a sidebar that runs your users' own coding agent (Claude Code, Codex, ACP agents) on their own subscription, wired both ways into your UI.",
   "keywords": [
     "claude-code",
@@ -11,7 +11,24 @@
     "mcp",
     "acp",
     "web-component",
-    "electron"
+    "electron",
+    "tauri",
+    "claude",
+    "anthropic",
+    "openai",
+    "qwen-code",
+    "no-api-key",
+    "subscription",
+    "bring-your-own-agent",
+    "byoa",
+    "local-agent",
+    "agent-bridge",
+    "ai-sidebar",
+    "ai-chat",
+    "chat-ui",
+    "agent-ui",
+    "agent-client-protocol",
+    "model-context-protocol"
   ],
   "author": "Ruiquan Qiao",
   "license": "MIT",
