@@ -232,6 +232,16 @@ Claude Agent SDK，也从不读取、保存或转发登录凭证；登录永远�
 </details>
 
 <details>
+<summary><b>能部署成一个网站，让大家用浏览器打开就用吗？</b></summary>
+
+不能。skillframe 在跑 app 服务端的那台电脑上启动 agent，所以服务端必须就在用户自己的电脑上：
+用户自己启动的本地网页 app，或者桌面 app（Electron、Tauri）。放到线上服务器，agent 就会在你的
+服务器上、用你登录的账号，替每个访问者干活。skillframe 默认只监听 127.0.0.1，并且只接受发给
+`localhost`、`127.0.0.1`、`[::1]` 的请求，别的电脑连不上。
+
+</details>
+
+<details>
 <summary><b>用户电脑上没装 agent 怎么办？</b></summary>
 
 侧边栏会说明哪个 agent 没装或没登录，并给出安装命令和登录方法。没装的 agent 在选择器里显示为"未安装"。
@@ -288,7 +298,7 @@ CI 在 Windows、macOS、Linux 三个系统、Node 22 和 24 上都跑一遍。
 - [x] Claude Code、Codex、ACP 三种 driver；工具走 MCP；共享文件带冲突检测
 - [x] 权限、提问、计划卡片；模式和模型选择器；附件；分叉
 - [x] `npm create skillframe`、Electron 示例、三系统 CI
-- [x] 第一个版本发布到 npm
+- [x] 第一个版本发布到 npm（[更新记录](CHANGELOG.md)）
 - [ ] 用真实的 ACP agent（Qwen Code）验证完整对话
 - [ ] 支持更多 agent，比如 Pi
 

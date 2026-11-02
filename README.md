@@ -242,6 +242,17 @@ never sees a key and never makes a model call of its own.
 </details>
 
 <details>
+<summary><b>Can I deploy it as a website that anyone opens in a browser?</b></summary>
+
+No. skillframe starts the agent on the computer that runs your app's server, so that server has
+to be the user's own computer: a local web app the user starts, or a desktop app (Electron,
+Tauri). On a hosted server the agent would run on your machine, with your sign-in, for every
+visitor. By default skillframe only listens on 127.0.0.1 and only accepts requests addressed to
+`localhost`, `127.0.0.1` or `[::1]`, so another computer can't reach it.
+
+</details>
+
+<details>
 <summary><b>What if the user has no agent installed?</b></summary>
 
 The sidebar says which agents are missing or signed out, with the command to install each one and
@@ -300,7 +311,7 @@ Windows, macOS and Linux, on Node 22 and 24.
 - [x] Claude Code, Codex and ACP drivers; tools over MCP; shared files with conflict detection
 - [x] Permission, question and plan cards; mode and model pickers; attachments; forks
 - [x] `npm create skillframe`, an Electron example, CI on three systems
-- [x] First release on npm
+- [x] First release on npm ([changelog](CHANGELOG.md))
 - [ ] Full chat verified with a real ACP agent (Qwen Code)
 - [ ] More agents, such as Pi
 
