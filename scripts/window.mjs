@@ -4,7 +4,7 @@
 //   node scripts/window.mjs grill-me | hello | blank | studio [folder]
 //
 // It builds what the example needs, starts its server on a free port, opens the page in an Edge
-// (or Chrome) window without an address bar, and stops the server when the window is closed.
+// (or Chrome) window without an address bar, and stops the server once no page of it is open.
 // Opening the same example again while it runs only opens another window on the same server.
 // Everything it keeps (the window's browser profile, the server's log) is in .cache/window/<app>/.
 import { spawn, spawnSync } from "node:child_process";
@@ -65,10 +65,41 @@ if (!url) {
 }
 writeFileSync(lockFile, JSON.stringify({ pid: process.pid, url }));
 
-// the window's own browser process lives as long as its last window: when it ends, so does the server
+// The server lives as long as a page of it is open, counted by the event streams the pages hold
+// (GET /sf/health). Not by the browser process we started: Edge with Startup boost, or a browser
+// already running on this profile, takes the window over and that process ends at once, which
+// used to stop the server under a window that had just opened ("127.0.0.1 refused to connect").
 const win = openWindow(url);
-win.on("exit", () => { stop(); process.exit(0); });
+let browserGone = false;
+win.on("exit", () => { browserGone = true; });
 for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"]) process.on(sig, () => { stop(); process.exit(0); });
+watchPages();
+
+async function watchPages() {
+  const grace = Number(process.env.WINDOW_GRACE_MS ?? 8000); // a reload or a restart reconnects well within this
+  const started = Date.now();
+  let seen = false;
+  let lastOpen = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 500));
+    const pages = await openPages(url);
+    if (pages === null) { lastOpen = Date.now(); continue; } // restarting: not an answer about the window
+    if (pages > 0) { seen = true; lastOpen = Date.now(); continue; }
+    if (seen ? Date.now() - lastOpen > grace : browserGone && Date.now() - started > 60_000) break;
+  }
+  stop();
+  process.exit(0);
+}
+
+/** how many pages hold the server's event stream; null when the server doesn't answer */
+async function openPages(at) {
+  try {
+    const r = await fetch(at + "sf/health", { signal: AbortSignal.timeout(2000) });
+    return r.ok ? (await r.json()).pages : null;
+  } catch {
+    return null;
+  }
+}
 
 /** starts the server on `port`; resolves with its address, or null if it didn't start */
 function start() {

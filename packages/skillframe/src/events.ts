@@ -14,6 +14,11 @@ export class EventBus {
     this.ping.unref();
   }
 
+  /** how many pages have the stream open (scripts/window.mjs keeps the server while one does) */
+  get pages(): number {
+    return this.clients.size;
+  }
+
   attach(res: ServerResponse): void {
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",

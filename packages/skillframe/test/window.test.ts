@@ -11,18 +11,20 @@ import { fakeEnv, PKG, tmpDir } from "./helpers.js";
 const SCRIPT = path.resolve(PKG, "../../scripts/window.mjs");
 const FAKE_WINDOW = path.join(PKG, "test/fixtures/fake-window.mjs");
 
+const windowEnv = (dir: string, ms: number, more: Record<string, string> = {}) => ({
+  ...fakeEnv(),
+  APP_HOME: path.join(dir, "app"),
+  WINDOW_HOME: path.join(dir, "window"),
+  WINDOW_BROWSER: FAKE_WINDOW,
+  WINDOW_GRACE_MS: "400",
+  FAKE_WINDOW_LOG: path.join(dir, "windows.log"),
+  FAKE_WINDOW_MS: String(ms),
+  ...more,
+});
+
 /** runs window.mjs for `app`, its window staying open `ms`; resolves when it exits */
-function open(app: string, dir: string, ms: number) {
-  const child = spawn(process.execPath, [SCRIPT, app], {
-    env: {
-      ...fakeEnv(),
-      APP_HOME: path.join(dir, "app"),
-      WINDOW_HOME: path.join(dir, "window"),
-      WINDOW_BROWSER: FAKE_WINDOW,
-      FAKE_WINDOW_LOG: path.join(dir, "windows.log"),
-      FAKE_WINDOW_MS: String(ms),
-    },
-  });
+function open(app: string, dir: string, ms: number, more: Record<string, string> = {}) {
+  const child = spawn(process.execPath, [SCRIPT, app], { env: windowEnv(dir, ms, more) });
   let stderr = "";
   child.stderr.on("data", (d) => (stderr += d));
   return new Promise<{ code: number | null; stderr: string }>((resolve) => child.on("exit", (code) => resolve({ code, stderr })));
@@ -41,7 +43,7 @@ async function until(check: () => boolean, what: string) {
 describe("scripts/window.mjs", () => {
   test("opens the page in a window, and closing the window stops the server", async () => {
     const dir = tmpDir("window");
-    const { code, stderr } = await open("blank", dir, 300);
+    const { code, stderr } = await open("blank", dir, 1000);
     assert.equal(code, 0, stderr);
     const [line] = windows(dir);
     assert.match(line, /^200 http:\/\/127\.0\.0\.1:\d+\/$/);
@@ -49,6 +51,22 @@ describe("scripts/window.mjs", () => {
     // the server went with the window
     const url = line.split(" ")[1];
     await assert.rejects(fetch(url, { signal: AbortSignal.timeout(2000) }));
+  });
+
+  // Edge with Startup boost (or one already running on the profile) ends the process we started at
+  // once and shows the window from another: the server used to be stopped under the new window
+  test("a browser that hands the window to another process keeps the server while the page is open", async () => {
+    const dir = tmpDir("window");
+    const done = open("blank", dir, 3000, { FAKE_WINDOW_HANDOFF: "1" });
+    const lock = path.join(dir, "window/running.json");
+    await until(() => existsSync(lock) && existsSync(path.join(dir, "windows.log")), "the window");
+    const { url } = JSON.parse(readFileSync(lock, "utf8"));
+    await new Promise((r) => setTimeout(r, 1500)); // the started process is long gone by now
+    assert.equal((await fetch(url, { signal: AbortSignal.timeout(2000) })).status, 200, "the server is still there");
+    assert.equal((await fetch(url + "sf/health")).ok, true);
+    const { code, stderr } = await done;
+    assert.equal(code, 0, stderr);
+    await assert.rejects(fetch(url, { signal: AbortSignal.timeout(2000) }), "the server went once the page closed");
   });
 
   test("opening it again while it runs opens another window on the same server", async () => {
@@ -66,9 +84,8 @@ describe("scripts/window.mjs", () => {
     const dir = tmpDir("window");
     const site = path.join(dir, "site");
     mkdirSync(site, { recursive: true });
-    const child = spawn(process.execPath, [SCRIPT, "studio", site], {
-      env: { ...fakeEnv(), APP_HOME: path.join(dir, "app"), WINDOW_HOME: path.join(dir, "window"), WINDOW_BROWSER: FAKE_WINDOW, FAKE_WINDOW_LOG: path.join(dir, "windows.log"), FAKE_WINDOW_MS: "8000" },
-    });
+    // a restart takes longer than the tests' usual grace
+    const child = spawn(process.execPath, [SCRIPT, "studio", site], { env: windowEnv(dir, 8000, { WINDOW_GRACE_MS: "8000" }) });
     const exited = new Promise<number | null>((r) => child.on("exit", r));
     const lock = path.join(dir, "window/running.json");
     await until(() => existsSync(lock), "the server");
@@ -111,9 +128,7 @@ describe("scripts/window.mjs", () => {
     writeFileSync(app, 'static class App { public const string Id = "blank"; public const string Title = "Blank"; }\n');
     const built = spawnSync(csc, ["/nologo", "/target:winexe", `/out:${exe}`, "/r:System.Windows.Forms.dll", path.resolve(PKG, "../../scripts/launcher/Launcher.cs"), app], { encoding: "utf8" });
     assert.equal(built.status, 0, built.stdout + built.stderr);
-    const child = spawn(exe, [], {
-      env: { ...fakeEnv(), APP_HOME: path.join(dir, "app"), WINDOW_HOME: path.join(dir, "window"), WINDOW_BROWSER: FAKE_WINDOW, FAKE_WINDOW_LOG: path.join(dir, "windows.log"), FAKE_WINDOW_MS: "300" },
-    });
+    const child = spawn(exe, [], { env: windowEnv(dir, 1000) });
     assert.equal(await new Promise((r) => child.on("exit", r)), 0);
     assert.match(windows(dir)[0], /^200 http:\/\/127\.0\.0\.1:\d+\/$/);
   });

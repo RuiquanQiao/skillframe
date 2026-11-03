@@ -104,6 +104,8 @@
 
   <script type="module">
     const $ = (id) => document.getElementById(id);
+    // the start screen has no sidebar yet: this stream tells the window's script the page is open
+    new EventSource("/sf/events");
     const state = await (await fetch("/studio/state")).json();
     let chat = null;
     let errors = [];

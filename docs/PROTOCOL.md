@@ -84,6 +84,7 @@ sidebar shows the bare name either way.
 | `GET /app` | `{ appName, agents: AgentInfo[], tools: { name, description }[], watch: string[] }` |
 | `GET /agents/:id/options` | `{ modes: Option[], models: Option[] }` for the pickers. `Option = { id, name, desc? }` |
 | `GET /ui/<file>` | the sidebar's own files (`/ui/skillframe-chat.js`) |
+| `GET /health` | `{ ok: true, pages }`: `pages` is how many pages hold `/events` open. A desktop shell can stop the server once it drops to 0, instead of watching a browser process that may hand its window to another one. |
 
 `AgentInfo = { id, name, installed, signedIn: boolean | null, install, login, fork }`.
 `signedIn` is a guess from where the agent keeps its own login (`null`: can't tell without asking it);

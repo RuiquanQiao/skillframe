@@ -152,6 +152,7 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
     return ANSWERED;
   }
   if (method === "GET" && route === "/app") return core.appInfo();
+  if (method === "GET" && route === "/health") return { ok: true, pages: core.bus.pages };
   if (route === "/files") {
     if (!core.files) throw new HttpError(404, "This app shares no files with the agent");
     if (method === "GET") return core.files.read(query.get("path") ?? "");
