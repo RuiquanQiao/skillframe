@@ -1,9 +1,9 @@
-// scripts/window.mjs, which the .exe files at the repository root run: it starts an example's
+// scripts/window.mjs, which the .exe files in demos/ run: it starts an example's
 // server, opens a window on it, and stops the server when the window closes. A fake window stands
 // in for Edge, and the example's data goes to a scratch folder.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { fakeEnv, PKG, tmpDir } from "./helpers.js";
@@ -99,5 +99,22 @@ describe("scripts/window.mjs", () => {
     const { code, stderr } = await open("nope", tmpDir("window"), 0);
     assert.equal(code, 1);
     assert.match(stderr, /nope/);
+  });
+
+  // the .exe files live in demos/, a folder below the repository: the launcher has to look up for it
+  const csc = path.join(process.env.WINDIR ?? "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  test("a launcher .exe in a folder below the repository finds window.mjs and opens the example", { skip: !existsSync(csc) && "needs Windows' C# compiler" }, async () => {
+    const dir = tmpDir("window");
+    const exe = path.join(dir, "deep", "below", "Blank.exe");
+    mkdirSync(path.dirname(exe), { recursive: true });
+    const app = path.join(dir, "App.cs");
+    writeFileSync(app, 'static class App { public const string Id = "blank"; public const string Title = "Blank"; }\n');
+    const built = spawnSync(csc, ["/nologo", "/target:winexe", `/out:${exe}`, "/r:System.Windows.Forms.dll", path.resolve(PKG, "../../scripts/launcher/Launcher.cs"), app], { encoding: "utf8" });
+    assert.equal(built.status, 0, built.stdout + built.stderr);
+    const child = spawn(exe, [], {
+      env: { ...fakeEnv(), APP_HOME: path.join(dir, "app"), WINDOW_HOME: path.join(dir, "window"), WINDOW_BROWSER: FAKE_WINDOW, FAKE_WINDOW_LOG: path.join(dir, "windows.log"), FAKE_WINDOW_MS: "300" },
+    });
+    assert.equal(await new Promise((r) => child.on("exit", r)), 0);
+    assert.match(windows(dir)[0], /^200 http:\/\/127\.0\.0\.1:\d+\/$/);
   });
 });

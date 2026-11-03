@@ -348,9 +348,15 @@ CI 在 Windows、macOS、Linux 三个系统、Node 22 和 24 上都跑一遍。
   聊天旁边运行；文件一改页面自动刷新，页面报的错会一起告诉 agent（`npm run studio -- <文件夹>`）
 - `examples/electron`：同一个侧边栏放进 Electron 窗口（`cd examples/electron && npm install && npm start`）
 
-在 Windows 上，`npm run exe` 会在仓库文件夹里生成 `skillframe.exe`、`skillframe Studio.exe`、
+用 skillframe 装上 agent 的应用，各自在独立的仓库里：
+
+- [Space Radar with an agent](https://github.com/RuiquanQiao/space-radar)：开源的磁盘占用查看器
+  [Space Radar](https://github.com/zz85/space-radar)；agent 读扫描结果、查清每个大文件夹是什么、在图上指给你看，
+  并把你同意删除的东西移进回收站
+
+在 Windows 上，`npm run exe` 会在 `demos` 文件夹里生成 `skillframe.exe`、`skillframe Studio.exe`、
 `Grill Me.exe` 和 `Hello Notes.exe`。双击即可在独立窗口里打开对应的例子，不用开终端；关掉窗口，例子也就停了。
-它们需要装好 Node.js、跑过 `npm install`，并且要留在仓库文件夹里。
+它们需要装好 Node.js、跑过 `npm install`，并且要留在仓库文件夹里（它们的快捷方式可以放在任何地方）。
 
 ## 路线图
 

@@ -1,4 +1,4 @@
-// The .exe files at the repository root: each one only runs `node scripts/window.mjs <app> [folder]`
+// The .exe files in demos/: each one only runs `node scripts/window.mjs <app> [folder]`
 // without a console window, and shows what went wrong if that fails. All the logic is in window.mjs.
 // App.Id and App.Title come from a small file scripts/build-exe.mjs writes for each .exe.
 // Build: npm run exe
@@ -13,10 +13,10 @@ static class Launcher
     [STAThread]
     static int Main(string[] args)
     {
-        string root = AppDomain.CurrentDomain.BaseDirectory;
         bool zh = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh";
-        string script = Path.Combine(root, "scripts", "window.mjs");
-        if (!File.Exists(script))
+        string root = FindRepository(AppDomain.CurrentDomain.BaseDirectory);
+        string script = root == null ? null : Path.Combine(root, "scripts", "window.mjs");
+        if (script == null)
             return Fail(zh
                 ? "找不到 scripts\\window.mjs。\n\n" + App.Title + ".exe 要留在 skillframe 仓库文件夹里；想放到别处，请建快捷方式。"
                 : "scripts\\window.mjs was not found.\n\n" + App.Title + ".exe has to stay in the skillframe repository folder; to start it from elsewhere, make a shortcut.");
@@ -52,6 +52,14 @@ static class Launcher
             return Fail((zh ? "无法启动 Node.js：" : "Couldn't start Node.js: ") + e.Message + "\n\n" + node);
         }
         return 0;
+    }
+
+    // the repository is the first folder up from the .exe that has scripts\window.mjs
+    static string FindRepository(string dir)
+    {
+        for (var d = new DirectoryInfo(dir); d != null; d = d.Parent)
+            if (File.Exists(Path.Combine(d.FullName, "scripts", "window.mjs"))) return d.FullName;
+        return null;
     }
 
     static string FindOnPath(string exe)

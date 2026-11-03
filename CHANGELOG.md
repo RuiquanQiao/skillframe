@@ -3,6 +3,12 @@
 All notable changes to the `skillframe` and `create-skillframe` packages. Versions follow
 [semantic versioning](https://semver.org); before 1.0, a minor version may change the API.
 
+## Unreleased
+
+- Repository only: `npm run exe` now puts the .exe files in `demos/` instead of the repository
+  root, and `skillframe.exe` has the skillframe icon (`docs/media/icon.svg`, made into an .ico by
+  `node scripts/render-icon.mjs`). The blank example's window shows the same icon.
+
 ## skillframe 0.1.4 (2026-11-02)
 
 - Fixed: the sidebar showed Markdown (GFM) tables as raw `| a | b |` lines. Agents use tables

@@ -1,5 +1,5 @@
-// Opens one of the examples in a window of its own, the way the .exe files at the repository
-// root do (they only run this script; see scripts/launcher/Launcher.cs).
+// Opens one of the examples in a window of its own, the way the .exe files in demos/
+// do (they only run this script; see scripts/launcher/Launcher.cs).
 //
 //   node scripts/window.mjs grill-me | hello | blank | studio [folder]
 //

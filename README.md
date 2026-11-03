@@ -368,9 +368,16 @@ Windows, macOS and Linux, on Node 22 and 24.
   errors to the agent (`npm run studio -- <folder>`)
 - `examples/electron`: the same sidebar in an Electron window (`cd examples/electron && npm install && npm start`)
 
+Apps given an agent with skillframe, each in its own repository:
+
+- [Space Radar with an agent](https://github.com/RuiquanQiao/space-radar): the open-source disk
+  usage viewer [Space Radar](https://github.com/zz85/space-radar); the agent reads the scan, finds
+  out what each big folder is, points at it in the chart and moves what you approve to the Recycle Bin
+
 On Windows, `npm run exe` makes `skillframe.exe`, `skillframe Studio.exe`, `Grill Me.exe` and
-`Hello Notes.exe` in the repository folder. Each opens its example in a window of its own, without a terminal, and stops it
-when the window closes. They need Node.js and `npm install`, and stay in the repository folder.
+`Hello Notes.exe` in the `demos` folder. Each opens its example in a window of its own, without a terminal, and stops it
+when the window closes. They need Node.js and `npm install`, and stay inside the repository folder (a shortcut to
+them can go anywhere).
 
 ## Roadmap
 

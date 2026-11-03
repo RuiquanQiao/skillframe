@@ -21,7 +21,7 @@ it.
 npm run studio -- E:\path\to\project        (from the repository root, after npm install)
 ```
 
-On Windows, `npm run exe` also makes `skillframe Studio.exe`: double-click it, or drop a folder on
+On Windows, `npm run exe` also makes `demos\skillframe Studio.exe`: double-click it, or drop a folder on
 it. Each project keeps its own chats, in `.data/projects/`; the last folder opens again next time.
 
 ## Files
