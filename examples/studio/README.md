@@ -10,8 +10,18 @@ it.
 - **The agent sees what you see.** With each message it hears which page you're on and the errors
   the page threw since it last loaded. When there are errors, a red button lists them, and "Ask the
   agent to fix these" sends them over.
-- **Projects with a dev server of their own** (Vite, Next…): type its address in the bar, or ask
-  the agent to start it; it can show any `localhost` address with its `show_in_preview` tool.
+- **Any stack.** Studio runs the project the way its own stack runs it and shows the page its dev
+  server prints (`stacks.js`): a Node project's `dev` / `start` script (npm, pnpm, yarn or bun, by
+  the lockfile; dependencies installed first when missing), Vite, Next.js, SvelteKit, Astro,
+  Django, Flask, FastAPI, Streamlit, Gradio (with the project's own `.venv`), Go, Rust, Flutter
+  web, .NET, Rails, Laravel and PHP. The button next to the address says how it is going
+  (installing, starting, running, stopped) and opens its output; when it stops, its last output
+  shows over the page with "Ask the agent to fix it".
+- **Anything else** runs from one line in `.skillframe/run.json`, which you or the agent can write:
+  `{ "command": "uvicorn api:app --reload --port {port}", "url": "http://127.0.0.1:{port}/" }`.
+  `{port}` is a free port Studio picks (also in `PORT`); `url` is only needed when the server
+  doesn't print its address. The agent has `app_logs` and `restart_app` tools, and hears with each
+  message how the server is doing and, when it stopped, why.
 - **Restart server** (in the window the .exe opens): builds skillframe again and restarts the
   studio's server in the same window. Use it when the code that runs the studio changed, for
   instance when the project you opened is skillframe itself. A reply being written at that moment

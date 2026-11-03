@@ -20,6 +20,10 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
 - `chat.setScreen(obj, label)`: an optional label shows above the box ("Claude sees: …").
 - Protocol: `effort`, `modelUsed` and `context` on chats, `POST /chats/:id/title`, `GET /health`,
   the `agent.limits` event, and the richer `GET /agents/:id/options` (docs/PROTOCOL.md).
+- examples/studio runs projects of any stack, not only static files: it recognizes Node (Vite,
+  Next.js and any dev script), Python (Django, Flask, FastAPI, Streamlit, Gradio), Go, Rust,
+  Flutter web, .NET, Rails, Laravel and PHP, starts the dev server and shows the address it prints.
+  Anything else runs from `.skillframe/run.json`. The agent gets `app_logs` and `restart_app`.
 - Repository only: the .exe windows no longer open on a stopped server ("127.0.0.1 refused to
   connect" on the first open). The server now lives while a page holds its event stream, not
   while the browser process that was started does: Edge with Startup boost ends that one at once.

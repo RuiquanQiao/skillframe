@@ -1,7 +1,8 @@
 // Studio: build an app inside skillframe. Open a project folder: the agent in the sidebar works in
 // that folder, and the main area shows the project's page, which reloads by itself when a file
 // changes. What the user is looking at and the errors the page throws reach the agent with each
-// message. A project with its own dev server (Vite, Next…) shows that address instead.
+// message. A project of any other stack (Vite, Next, Django, Flask, Go, Rust, Flutter…) is run with
+// its own dev server, which Studio starts and shows instead (stacks.js).
 //
 //   npm run studio [-- <folder>]        (from the repository root)
 import { spawn } from "node:child_process";
@@ -10,7 +11,9 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, watch,
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createServer } from "node:net";
 import { createSkillframe } from "skillframe";
+import { AppRun, detect } from "./stacks.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // APP_HOME puts the data somewhere else (the tests use it)
@@ -26,7 +29,7 @@ let saved = { recent: [], last: null };
 try { saved = { ...saved, ...JSON.parse(readFileSync(stateFile, "utf8")) }; } catch {}
 
 let origin = "";
-let project = null; // { folder, name, preview: { url, close } }
+let project = null; // { folder, name, preview: { url, close }, run: AppRun | null }
 let sf = null;
 
 const TYPES = {
@@ -115,8 +118,11 @@ async function open(folder) {
     await sf.close();
   }
   await project?.preview.close();
+  project?.run?.stop();
   const preview = await startPreview(folder);
-  project = { folder, name: path.basename(folder) || folder, preview };
+  project = { folder, name: path.basename(folder) || folder, preview, run: null };
+  const spec = detect(folder);
+  if (spec) project.run = new AppRun(folder, spec, await freePort(), onRun);
   // each project keeps its own chats
   const id = createHash("sha1").update(folder.toLowerCase()).digest("hex").slice(0, 12);
   sf = createSkillframe({
@@ -125,12 +131,16 @@ async function open(folder) {
     dataDir: path.join(dataDir, "projects", id),
     context: ({ screen }) => {
       const s = screen ?? {};
-      const shows = s.url && !s.url.startsWith(preview.url) ? s.url : preview.url;
+      const run = project.run?.status();
+      const shows = s.url || run?.url || preview.url;
+      const runFile = 'write .skillframe/run.json as { "command": "...", "url": "http://127.0.0.1:{port}/" } ({port} is a free port Studio gives it, also in the PORT variable), then call restart_app';
       return [
         `The user is building the project in ${folder} (your working folder) and sees it running in the main area, next to you.`,
-        shows === preview.url
-          ? `The main area shows the folder's own files as a website at ${preview.url}: index.html is the start page, and it reloads by itself whenever a file in the folder changes, so there is nothing to start or refresh. If the project needs a dev server of its own, start it and call show_in_preview with its address.`
-          : `The main area shows ${shows}, a server of the project's own.`,
+        run
+          ? `Studio runs it as a ${run.stack} project with "${run.command}" (${run.own ? "from .skillframe/run.json" : "picked from the project's files"}); it is ${run.state}${run.url ? ` at ${run.url}` : ""}. Its output is in the app_logs tool; restart_app restarts it (needed after changes its dev server doesn't reload by itself, and for servers in Go, Rust and the like). Don't start it yourself in a terminal. To run it another way, ${runFile}.`
+          : `The main area shows the folder's own files as a website at ${preview.url}: index.html is the start page, and it reloads by itself whenever a file in the folder changes, so there is nothing to start or refresh. If the project needs a server of its own (in any language), ${runFile}: Studio runs it and shows it here.`,
+        run?.state === "exited" ? `The project's server stopped (exit code ${run.code}). Its last output:\n${project.run.tail(25)}` : "",
+        shows !== preview.url && shows !== run?.url ? `The main area shows ${shows}.` : "",
         s.path ? `The user is looking at ${s.path}${s.title ? ` ("${s.title}")` : ""}.` : "",
         s.errors?.length ? `The page reported these errors since it last loaded:\n${s.errors.map((e) => `- ${e}`).join("\n")}` : "",
       ].filter(Boolean).join("\n");
@@ -146,11 +156,64 @@ async function open(folder) {
           return `The main area now shows ${target}.`;
         },
       },
+      app_logs: {
+        description: "The last lines the project's own server printed (the dev server Studio runs for it), and whether it is running.",
+        input: {},
+        run: () => {
+          const r = project.run;
+          if (!r) return "Studio serves the folder's files directly; there is no server of the project's own (write .skillframe/run.json to run one).";
+          const st = r.status();
+          return `${st.stack}, ${st.state}${st.url ? ` at ${st.url}` : ""}; command: ${st.command}\n\n${r.tail(120) || "(no output yet)"}`;
+        },
+      },
+      restart_app: {
+        description: "Restart the project's server, reading the project again (a new or changed .skillframe/run.json, package.json and so on). Use after changes its dev server doesn't reload by itself.",
+        input: {},
+        run: () => restartRun(),
+      },
     },
   });
   sf.setOrigin(origin);
+  // not awaited: installing dependencies can take minutes, and the page shows how it goes
+  project.run?.start();
   saved = { recent: [folder, ...saved.recent.filter((f) => f.toLowerCase() !== folder.toLowerCase())].slice(0, 8), last: folder };
   writeFileSync(stateFile, JSON.stringify(saved, null, 2) + "\n");
+}
+
+/** the project's server changed state: the page hears it, and a server that is up is shown */
+function onRun(status) {
+  sf?.publish("studio-run", status);
+  if (status.state === "running") sf?.publish("studio-show", { url: status.url });
+}
+
+/** reads the project again and (re)starts its server; its files as they are when there is none any more */
+async function restartRun() {
+  const spec = detect(project.folder);
+  if (!spec) {
+    project.run?.stop();
+    project.run = null;
+    sf.publish("studio-run", null);
+    sf.publish("studio-show", { url: project.preview.url });
+    return "There is no server to run: the folder's files are shown as they are.";
+  }
+  if (project.run) {
+    project.run.spec = spec;
+    await project.run.restart();
+  } else {
+    project.run = new AppRun(project.folder, spec, await freePort(), onRun);
+    await project.run.start();
+  }
+  return `Restarting with "${project.run.status().command}"; it shows in the main area once it is up (app_logs has its output).`;
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const s = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+    s.on("error", reject);
+  });
 }
 
 /** the system's folder picker (Windows only); resolves with the folder, or null when cancelled */
@@ -190,7 +253,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && url.pathname === "/studio/state") {
     return json(res, 200, {
-      project: project && { folder: project.folder, name: project.name, preview: project.preview.url },
+      project: project && { folder: project.folder, name: project.name, preview: project.preview.url, run: project.run?.status() ?? null },
       recent: saved.recent.filter((f) => existsSync(f)),
       canBrowse: process.platform === "win32",
       canRestart: process.env.STUDIO_RESTARTABLE === "1",
@@ -205,6 +268,11 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (req.method === "POST" && url.pathname === "/studio/browse") return json(res, 200, { folder: await browse() });
+  if (req.method === "GET" && url.pathname === "/studio/run/logs") return json(res, 200, { status: project?.run?.status() ?? null, log: project?.run?.tail(400) ?? "" });
+  if (req.method === "POST" && url.pathname === "/studio/run/restart") {
+    if (!project) return json(res, 400, { error: "No project is open" });
+    return json(res, 200, { message: await restartRun() });
+  }
   if (req.method === "POST" && url.pathname === "/studio/restart" && process.env.STUDIO_RESTARTABLE === "1") {
     json(res, 200, { ok: true });
     setTimeout(() => process.exit(RESTART), 100);
@@ -218,4 +286,7 @@ origin = `http://127.0.0.1:${server.address().port}`;
 // the folder to open: given on the command line or by window.mjs, else the last one
 const first = process.argv[2] ?? process.env.PROJECT ?? saved.last;
 if (first) await open(first).catch((e) => console.error(e.message));
+// the project's server goes with Studio's
+for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"]) process.on(sig, () => process.exit(0));
+process.on("exit", () => project?.run?.stop());
 console.log(`skillframe Studio is running at ${origin}/`);
