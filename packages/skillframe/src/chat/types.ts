@@ -9,12 +9,25 @@ export interface ChatMeta {
   sessionId?: string;
   model?: string;
   mode?: string;
+  /** picked effort level ("low" … "max"; absent: the agent's own choice) */
+  effort?: string;
+  /** the model the agent last said it runs (the picked one, or its default) */
+  modelUsed?: string;
+  /** how full the agent's context window is, after the last reply */
+  context?: ContextUse;
   /** the agent's task list as it last reported it */
   tasks?: Task[];
   /** set on a chat forked from another: its first reply branches that session at `at` */
   fork?: { sessionId: string; at?: string };
   createdAt: number;
   updatedAt: number;
+}
+
+/** tokens in the context window; `used` is unknown right after the agent compacted it */
+export interface ContextUse {
+  used: number | null;
+  window: number | null;
+  compacted?: boolean;
 }
 
 export interface Task {

@@ -178,13 +178,41 @@ describe("pickers, tasks, attachments, forks (Claude Code and Codex)", () => {
     assert.equal(argv[argv.indexOf("--model") + 1], "sonnet");
   });
 
-  test("picker options: Claude Code's are built in; Codex's come from its own model list", async () => {
+  test("picker options come from the agents themselves: models with effort levels, commands, account, limits", async () => {
     const claude = (await request(`${url}/sf/agents/claude/options`, "GET")).json;
-    assert.deepEqual(claude.modes.map((m: any) => m.id), ["default", "acceptEdits", "plan"]);
-    assert.deepEqual(claude.models.map((m: any) => m.id), ["opus", "sonnet", "haiku"]);
+    assert.deepEqual(claude.modes.map((m: any) => m.id), ["default", "acceptEdits", "plan", "auto", "bypassPermissions"]);
+    // Claude Code's own list: "default" names the default model; full ids go under "More models"
+    assert.deepEqual(claude.models.map((m: any) => [m.id, m.name, m.efforts.length, !!m.more]), [["opus", "Opus 5.5", 5, false], ["haiku", "Haiku 4.5", 0, false], ["claude-opus-5", "Opus 5", 5, true]]);
+    assert.equal(claude.defaultModel, "Sonnet 5.5");
+    assert.deepEqual(claude.commands.map((c: any) => [c.name, c.desc]), [["compact", "Clear history but keep a summary"], ["review", "Review a pull request"]]);
+    assert.deepEqual(claude.account, { email: "fake@example.com", plan: "Claude Pro" });
     const codex = (await request(`${url}/sf/agents/codex/options`, "GET")).json;
-    assert.deepEqual(codex.models, [{ id: "gpt-fake", name: "GPT Fake", desc: "a fake model" }]);
+    assert.deepEqual(codex.models, [{ id: "gpt-fake", name: "GPT Fake", desc: "a fake model", efforts: ["low", "medium", "high"] }]);
+    assert.equal(codex.defaultModel, "GPT Fake");
+    assert.deepEqual(codex.account, { email: "fake@example.com", plan: "plus" });
+    assert.deepEqual(Object.keys(codex.limits.windows), ["five_hour", "seven_day"]);
+    assert.equal(codex.limits.windows.seven_day.utilization, 0.55);
     assert.equal((await request(`${url}/sf/agents/nope/options`, "GET")).status, 404);
+  });
+
+  test("effort goes to the agent; context use and plan limits come back from its reply", async () => {
+    const id = await c.chat("claude");
+    await request(`${url}/sf/chats/${id}/settings`, "POST", { effort: "xhigh", model: "opus" });
+    await c.say(id, "args");
+    const argv = JSON.parse(await c.lastText(id)) as string[];
+    assert.equal(argv[argv.indexOf("--effort") + 1], "xhigh");
+    await c.say(id, "usage");
+    const meta = (await c.get(id)).meta;
+    assert.deepEqual(meta.context, { used: 50500, window: 200000 });
+    const opts = (await request(`${url}/sf/agents/claude/options`, "GET")).json;
+    assert.equal(opts.limits.windows.five_hour.utilization, 0.42);
+    assert.equal((await request(`${url}/sf/chats/${id}/settings`, "POST", { model: "a b; rm" })).status, 400, "a model id is one plain word");
+  });
+
+  test("a chat can be renamed", async () => {
+    const id = await c.chat("claude");
+    assert.equal((await request(`${url}/sf/chats/${id}/title`, "POST", { title: "  Groceries  " })).json.title, "Groceries");
+    assert.equal((await request(`${url}/sf/chats/${id}/title`, "POST", { title: " " })).status, 400);
   });
 
   test("Claude Code's TodoWrite and Codex's plan become the chat's task list", async () => {

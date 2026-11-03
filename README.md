@@ -229,8 +229,13 @@ by looking upward from its own folder.
 - Streams replies, thinking and tool steps; shows the agent's task list.
 - Cards for the agent's permission requests, its questions and its plans: allow, always allow, or
   deny with a reason; pick answers; approve a plan or keep planning.
-- Pickers for the agent, the permission mode and the model; a stop button; messages typed while
-  the agent works wait in a queue.
+- The agent's own controls, read from the agent itself: every model it offers (with "More models"
+  and any model id), the effort levels that model has, all of its permission modes, its slash
+  commands and skills (type `/`), and a ring with the context window's use and the plan's usage
+  limits. All of them are the sidebar's own keyboard-first menus, not native `<select>`s.
+- Shortcuts as in the desktop apps: Esc stops, Shift+Tab switches the mode, Ctrl+Shift+M / I / E
+  open the mode / model / effort menus. Messages typed while the agent works wait in a queue.
+- Chats: switch, rename, delete; copy a reply; see how long it took.
 - Attachments: paste, drop or pick files. Images go to the agent as images, other files by path.
 - Fork a chat from any reply (Claude Code and Codex).
 - Light and dark, English and Chinese, from 320 px wide up. Its styles live in a shadow root, so

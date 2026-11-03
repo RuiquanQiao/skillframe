@@ -88,6 +88,12 @@ async function reply(text, content) {
     say("Hi there");
     return done("Hi there");
   }
+  if (text === "usage") {
+    out({ type: "rate_limit_event", rate_limit_info: { status: "allowed", unifiedWindows: { five_hour: { utilization: 0.42, resetsAt: 1900000000 }, seven_day: { utilization: 0.73, resetsAt: 1900300000 } } } });
+    out({ type: "assistant", session_id: session, uuid: `u-${++n}`, message: { model: "fake-model", usage: { input_tokens: 1000, cache_read_input_tokens: 40000, cache_creation_input_tokens: 9000, output_tokens: 500 }, content: [{ type: "text", text: "used some" }] } });
+    out({ type: "stream_event", session_id: session, event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "used some" } } });
+    return done("used some", { modelUsage: { "fake-model": { contextWindow: 200000 } } });
+  }
   if (text === "args") {
     say(JSON.stringify(argv));
     return done("args");
@@ -148,6 +154,20 @@ lines.on("line", (line) => {
     waiting.delete(msg.response.request_id);
   } else if (msg.type === "control_request" && msg.request.subtype === "interrupt") {
     interrupted?.();
+  } else if (msg.type === "control_request" && msg.request.subtype === "initialize") {
+    // what the real one answers, shortened (no model call)
+    const efforts = ["low", "medium", "high", "xhigh", "max"];
+    out({ type: "control_response", response: { subtype: "success", request_id: msg.request_id, response: {
+      models: [
+        { value: "default", resolvedModel: "claude-sonnet-5-5", displayName: "Default (recommended)", description: "Sonnet 5.5 · Efficient for routine tasks", supportedEffortLevels: efforts },
+        { value: "opus", resolvedModel: "claude-opus-5-5", displayName: "Opus 5.5", description: "Best for everyday, complex tasks", supportedEffortLevels: efforts },
+        { value: "haiku", resolvedModel: "claude-haiku-4-5", displayName: "Haiku 4.5", description: "Fastest for quick answers" },
+        { value: "claude-opus-5", resolvedModel: "claude-opus-5", displayName: "Opus 5", description: "Best for everyday, complex tasks", supportedEffortLevels: efforts },
+      ],
+      commands: [{ name: "compact", description: "Clear history but keep a summary", argumentHint: "<instructions>" }, { name: "review", description: "Review a pull request (bundled)", argumentHint: "" }],
+      account: { email: "fake@example.com", subscriptionType: "Claude Pro" },
+      current_permission_mode: "default",
+    } } });
   } else if (msg.type === "user") {
     const content = msg.message.content;
     const text = Array.isArray(content) ? content.filter((b) => b.type === "text").map((b) => b.text).join("") : String(content);

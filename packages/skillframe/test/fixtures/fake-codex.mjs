@@ -133,7 +133,14 @@ lines.on("line", (line) => {
     case "initialized":
       return;
     case "model/list":
-      return reply({ data: [{ id: "gpt-fake", displayName: "GPT Fake", description: "a fake model" }, { id: "hidden-one", displayName: "Hidden", hidden: true }] });
+      return reply({ data: [
+        { id: "gpt-fake", displayName: "GPT Fake", description: "a fake model", isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "medium" }, { reasoningEffort: "high" }] },
+        { id: "hidden-one", displayName: "Hidden", hidden: true },
+      ] });
+    case "account/read":
+      return reply({ account: { type: "chatgpt", email: "fake@example.com", planType: "plus" }, requiresOpenaiAuth: true });
+    case "account/rateLimits/read":
+      return reply({ rateLimits: { primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1900000000 }, secondary: { usedPercent: 55, windowDurationMins: 10080, resetsAt: 1900300000 } } });
     case "thread/start":
     case "thread/resume":
     case "thread/fork":

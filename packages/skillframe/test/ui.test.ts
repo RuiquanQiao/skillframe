@@ -137,7 +137,8 @@ describe("the sidebar in a browser", async () => {
     const { page } = await open();
     await say(page, "perm");
     const card = page.locator("skillframe-chat .ask:not(.settled)");
-    await card.getByText("Claude Code wants to use Write").waitFor();
+    await card.getByText("Claude Code wants to write a file").waitFor();
+    await card.locator(".diff .add", { hasText: "+ x" }).waitFor(); // what it would write, as a diff
     await card.getByRole("button", { name: "Allow", exact: true }).click();
     await page.locator("skillframe-chat .ask.settled", { hasText: "Allowed" }).waitFor();
     await page.locator("skillframe-chat .md", { hasText: /^allowed$/ }).waitFor();
@@ -161,7 +162,7 @@ describe("the sidebar in a browser", async () => {
     await say(page, "plan");
     const card = page.locator("skillframe-chat .ask:not(.settled)");
     await card.locator("strong", { hasText: "milk" }).waitFor(); // the plan's markdown is drawn
-    await card.getByRole("button", { name: "Approve and start" }).click();
+    await card.getByRole("button", { name: "Approve, accept edits" }).click();
     await page.locator("skillframe-chat .md", { hasText: "approved: acceptEdits" }).waitFor();
     await page.close();
   });
@@ -174,10 +175,10 @@ describe("the sidebar in a browser", async () => {
     // in this order, in the same instant: the pick lands while the new chat is still being made
     await page.evaluate(() => {
       const root = document.querySelector("skillframe-chat")!.shadowRoot!;
-      (root.querySelector(".bar button.ghost") as HTMLButtonElement).click();
-      const pick = root.querySelector("select.pick") as HTMLSelectElement;
-      pick.value = "codex";
-      pick.dispatchEvent(new Event("change"));
+      (root.querySelector(".bar button.new") as HTMLButtonElement).click();
+      (root.querySelector(".model-btn") as HTMLButtonElement).click();
+      const codex = [...root.querySelectorAll(".pop .mi")].find((b) => b.textContent!.startsWith("Codex")) as HTMLButtonElement;
+      codex.click();
     });
     await page.locator("skillframe-chat textarea[placeholder='Message Codex…']").waitFor();
     await page.waitForTimeout(300);
@@ -226,9 +227,12 @@ describe("the sidebar in a browser", async () => {
 
   test("the mode and model pickers set the chat's next replies", { skip: !browser }, async () => {
     const { page, id } = await open();
-    await page.locator("skillframe-chat select[aria-label='Permission mode']").selectOption("plan");
-    await page.locator("skillframe-chat select[aria-label='Model']").selectOption("haiku");
-    await page.waitForTimeout(200);
+    await page.locator("skillframe-chat .mode-btn").click();
+    await page.locator("skillframe-chat .pop .mi", { hasText: "Plan" }).first().click();
+    await page.locator("skillframe-chat .mode-btn", { hasText: "Plan" }).waitFor();
+    await page.locator("skillframe-chat .model-btn").click();
+    await page.locator("skillframe-chat .pop .mi", { hasText: "Haiku 4.5" }).click();
+    await page.locator("skillframe-chat .model-btn", { hasText: "Haiku 4.5" }).waitFor();
     const meta = (await request(`${url}/sf/chats/${id}`, "GET")).json.meta;
     assert.deepEqual([meta.mode, meta.model], ["plan", "haiku"]);
     await page.close();
@@ -236,15 +240,18 @@ describe("the sidebar in a browser", async () => {
 
   test("in Chinese, the built-in agents' modes and sign-in hint are in Chinese too", { skip: !browser }, async () => {
     const { page } = await open();
-    await page.locator("skillframe-chat select[aria-label='Permission mode'] option[value='plan']").waitFor({ state: "attached" });
+    await page.locator("skillframe-chat .mode-btn").waitFor();
     const shown = await page.evaluate(() => {
       const el = document.querySelector("skillframe-chat") as any;
       el.setAttribute("lang", "zh");
       el.state.app.agents.find((a: any) => a.id === "claude").signedIn = false; // as on a machine where it isn't
       el.render();
       const root = el.shadowRoot;
-      const plan = root.querySelector("select option[value='plan']");
-      return { mode: plan.textContent, desc: plan.title, empty: root.querySelector(".empty").textContent };
+      root.querySelector(".mode-btn").click();
+      const plan = [...root.querySelectorAll(".pop .mi")][2];
+      const out = { mode: plan.querySelector(".label").textContent, desc: plan.querySelector(".desc").textContent, empty: root.querySelector(".empty").textContent };
+      el.closePop();
+      return out;
     });
     assert.deepEqual([shown.mode, shown.desc], ["先出计划", "只读；先提出计划，你批准后再动手"]);
     assert.match(shown.empty, /看起来还没登录。打开终端，运行 claude/);
@@ -269,9 +276,11 @@ describe("the sidebar in a browser", async () => {
     const { page } = await open("codex");
     await say(page, "hello");
     await idle(page);
-    await page.locator("skillframe-chat select.pick").selectOption("claude");
+    await page.locator("skillframe-chat .model-btn").click();
+    await page.locator("skillframe-chat .pop .mi", { hasText: "Claude Code" }).click();
     await page.locator("skillframe-chat textarea[placeholder='Message Claude Code…']").waitFor();
-    await page.locator("skillframe-chat select[aria-label='Model'] option[value='haiku']").waitFor({ state: "attached" });
+    await page.locator("skillframe-chat .model-btn").click();
+    await page.locator("skillframe-chat .pop .mi", { hasText: "Haiku 4.5" }).waitFor();
     await page.close();
   });
 
@@ -309,9 +318,129 @@ describe("the sidebar in a browser", async () => {
     await idle(page);
     const first = page.locator("skillframe-chat .reply").first();
     await first.hover();
-    await first.getByRole("button", { name: "Fork from here" }).click();
-    await page.locator("skillframe-chat .bar select:not(.pick) option:checked", { hasText: "(fork)" }).waitFor({ state: "attached" });
+    await first.getByRole("button", { name: "Fork" }).click();
+    await page.locator("skillframe-chat .bar .chat-btn", { hasText: "(fork)" }).waitFor();
     assert.equal(await page.locator("skillframe-chat .user").count(), 1);
+    await page.close();
+  });
+
+  test("no native <select> anywhere: every picker is the sidebar's own menu", { skip: !browser }, async () => {
+    const { page } = await open();
+    await page.locator("skillframe-chat .model-btn").waitFor();
+    for (const btn of [".bar .chat-btn", ".mode-btn", ".model-btn", ".ring"]) {
+      await page.locator(`skillframe-chat ${btn}`).click();
+      await page.locator("skillframe-chat .pop").waitFor();
+      assert.equal(await page.locator("skillframe-chat select").count(), 0, btn);
+      await page.keyboard.press("Escape");
+      await page.locator("skillframe-chat .pop").waitFor({ state: "detached" });
+    }
+    await page.close();
+  });
+
+  test("the model menu: the agent's own models, More models, and the effort levels that model has", { skip: !browser }, async () => {
+    const { page, id } = await open();
+    await page.locator("skillframe-chat .model-btn").click();
+    const pop = page.locator("skillframe-chat .pop");
+    await pop.locator(".mi", { hasText: "Opus 5.5" }).waitFor();
+    assert.equal(await pop.locator(".mi", { hasText: "Opus 5" }).filter({ hasNotText: "5.5" }).isVisible(), false, "older models wait under More models");
+    await pop.locator(".mi.more").click();
+    await pop.locator(".mi", { hasText: /^Opus 5Best/ }).click();
+    await page.locator("skillframe-chat .model-btn", { hasText: "Opus 5" }).waitFor();
+    // effort, from the keyboard shortcut
+    await page.locator("skillframe-chat textarea").focus();
+    await page.keyboard.press("Control+Shift+E");
+    await pop.locator(".seg button", { hasText: "XHigh" }).click();
+    await page.locator("skillframe-chat .model-btn .eff", { hasText: "XHigh" }).waitFor();
+    let meta = (await request(`${url}/sf/chats/${id}`, "GET")).json.meta;
+    assert.deepEqual([meta.model, meta.effort], ["claude-opus-5", "xhigh"]);
+    // a model without effort levels: the effort goes back to the agent's choice
+    await page.locator("skillframe-chat .model-btn").click();
+    await pop.locator(".mi", { hasText: "Haiku 4.5" }).click();
+    await page.locator("skillframe-chat .model-btn", { hasText: "Haiku 4.5" }).waitFor();
+    assert.equal(await page.locator("skillframe-chat .model-btn .eff").count(), 0);
+    meta = (await request(`${url}/sf/chats/${id}`, "GET")).json.meta;
+    assert.deepEqual([meta.model, meta.effort], ["haiku", ""]);
+    await page.close();
+  });
+
+  test("the ring shows the context use; its panel, the plan's usage windows", { skip: !browser }, async () => {
+    const { page } = await open();
+    await say(page, "usage");
+    await idle(page);
+    await page.waitForFunction(() => (document.querySelector("skillframe-chat") as any).state.meta?.context?.used > 0);
+    await page.locator("skillframe-chat .ring").click();
+    const pop = page.locator("skillframe-chat .pop");
+    await pop.getByText("50.5k of 200k tokens").waitFor();
+    await pop.getByText("25%").waitFor();
+    await pop.getByText("Last 5 hours").waitFor();
+    await pop.getByText("42%").waitFor();
+    await pop.getByText("73%").waitFor();
+    await pop.getByText("Claude Pro, fake@example.com").waitFor();
+    await page.close();
+  });
+
+  test("typing / lists the commands; Enter puts the picked one in the box", { skip: !browser }, async () => {
+    const { page } = await open();
+    await page.locator("skillframe-chat .model-btn").waitFor();
+    await page.waitForFunction(() => (document.querySelector("skillframe-chat") as any).agentInfo?.commands?.length > 0);
+    const box = page.locator("skillframe-chat textarea");
+    await box.fill("/com");
+    await page.locator("skillframe-chat .pop.slash .mi.active", { hasText: "/compact" }).waitFor();
+    await box.press("Enter");
+    assert.equal(await box.inputValue(), "/compact ");
+    await page.locator("skillframe-chat .pop").waitFor({ state: "detached" });
+    // the sidebar's own: /effort high sets it without sending anything
+    await box.fill("/effort high");
+    await box.press("Enter");
+    await page.locator("skillframe-chat .model-btn .eff", { hasText: "High" }).waitFor();
+    assert.equal(await page.locator("skillframe-chat .user").count(), 0);
+    await page.close();
+  });
+
+  test("Shift+Tab switches the permission mode", { skip: !browser }, async () => {
+    const { page, id } = await open();
+    await page.locator("skillframe-chat .mode-btn").waitFor();
+    await page.locator("skillframe-chat textarea").press("Shift+Tab");
+    await page.locator("skillframe-chat .mode-btn", { hasText: "Ask before edits" }).waitFor();
+    await page.locator("skillframe-chat textarea").press("Shift+Tab");
+    await page.locator("skillframe-chat .mode-btn", { hasText: "Accept edits" }).waitFor();
+    assert.equal((await request(`${url}/sf/chats/${id}`, "GET")).json.meta.mode, "acceptEdits");
+    await page.close();
+  });
+
+  test("every menu stays inside the window at 320 px, light and dark", { skip: !browser }, async () => {
+    const { page } = await open("claude", { width: 320, height: 640 });
+    await page.locator("skillframe-chat .model-btn").waitFor();
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      for (const btn of [".bar .chat-btn", ".mode-btn", ".model-btn", ".ring"]) {
+        await page.locator(`skillframe-chat ${btn}`).click();
+        const box = await page.locator("skillframe-chat .pop").boundingBox();
+        assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 320 && box.y + box.height <= 640, `${btn} ${colorScheme}: ${JSON.stringify(box)}`);
+        await page.keyboard.press("Escape");
+      }
+      assert.deepEqual(await spills(page), { out: [], sideways: false, page: false }, colorScheme);
+    }
+    await page.close();
+  });
+
+  test("rename and delete from the chat menu", { skip: !browser }, async () => {
+    const { page, id } = await open();
+    await say(page, "hello");
+    await idle(page);
+    await page.locator("skillframe-chat .bar .chat-btn").click();
+    await page.locator("skillframe-chat .pop .mi", { hasText: "Rename this chat" }).click();
+    const input = page.locator("skillframe-chat .title-input");
+    await input.fill("Milk run");
+    await input.press("Enter");
+    await page.locator("skillframe-chat .bar .chat-btn", { hasText: "Milk run" }).waitFor();
+    await page.locator("skillframe-chat .bar .chat-btn").click();
+    const del = page.locator("skillframe-chat .pop .mi.danger");
+    await del.click();
+    await del.getByText("Click again to delete").waitFor(); // one click is not enough
+    await del.click();
+    await page.waitForFunction((gone) => (document.querySelector("skillframe-chat") as any).state.chatId !== gone, id);
+    assert.equal((await request(`${url}/sf/chats/${id}`, "GET")).status, 404);
     await page.close();
   });
 });

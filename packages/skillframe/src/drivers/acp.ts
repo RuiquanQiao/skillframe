@@ -246,6 +246,9 @@ export class AcpDriver implements Driver {
       case "current_mode_update":
         runner.store.update(turn.chatId, { mode: u.currentModeId }, false);
         break;
+      case "usage_update":
+        if (u.size) turn.usage = { used: Number(u.used ?? 0), window: Number(u.size) };
+        break;
     }
     return null;
   }

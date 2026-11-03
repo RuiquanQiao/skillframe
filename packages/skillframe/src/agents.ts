@@ -46,8 +46,10 @@ export const AGENTS: AgentDef[] = [
       { id: "default", name: "Ask before edits", desc: "Asks before editing files or running commands" },
       { id: "acceptEdits", name: "Accept edits", desc: "Edits files directly; still asks before risky commands" },
       { id: "plan", name: "Plan", desc: "Read-only; proposes a plan and acts once you approve" },
+      { id: "auto", name: "Auto", desc: "Claude Code's safety checks decide; asks only when something looks risky" },
+      { id: "bypassPermissions", name: "Bypass permissions", desc: "Never asks. Only for a folder you can afford to lose" },
     ],
-    // aliases Claude Code resolves to its current models
+    // aliases Claude Code resolves to its current models (the real list comes from Claude Code itself)
     models: [
       { id: "opus", name: "Opus" },
       { id: "sonnet", name: "Sonnet" },
@@ -68,6 +70,7 @@ export const AGENTS: AgentDef[] = [
       { id: "default", name: "Ask before edits", desc: "Asks before running anything it doesn't trust" },
       { id: "acceptEdits", name: "Accept edits", desc: "Works in the folder; asks when it needs more" },
       { id: "plan", name: "Read only", desc: "Can look but not change anything" },
+      { id: "bypassPermissions", name: "Full access", desc: "Never asks and can change anything on this computer" },
     ],
     models: [], // asked from `codex app-server` (model/list)
   },

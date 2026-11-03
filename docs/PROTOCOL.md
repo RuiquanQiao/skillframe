@@ -38,6 +38,9 @@ interface ChatMeta {
   sessionId?: string;        // the agent's own session; the next reply resumes it
   model?: string;            // picked model ("" or absent: the agent's default)
   mode?: string;             // picked permission mode (absent: as the user set the agent up)
+  effort?: string;           // picked effort level ("low" … "max", or the agent's own; absent: the agent decides)
+  modelUsed?: string;        // the model the agent said it ran last
+  context?: { used: number | null; window: number | null; compacted?: boolean };  // context window use after the last reply
   tasks?: Task[];            // the agent's task list as last reported
   fork?: { sessionId: string; at?: string };   // set on a fork until its first reply
   createdAt: number;
@@ -82,7 +85,7 @@ sidebar shows the bare name either way.
 | Route | Answer |
 |---|---|
 | `GET /app` | `{ appName, agents: AgentInfo[], tools: { name, description }[], watch: string[] }` |
-| `GET /agents/:id/options` | `{ modes: Option[], models: Option[] }` for the pickers. `Option = { id, name, desc? }` |
+| `GET /agents/:id/options` | What the agent reports about itself, asked without a model call (`?refresh=1` asks again): `{ modes: Option[], models: Model[], defaultModel?, commands: { name, desc, hint }[], account?: { email?, plan? }, signedIn?, limits?: Limits }`. `Option = { id, name, desc? }`, `Model = Option & { efforts: string[], more?: true }` (`more`: listed under "More models"), `Limits = { windows: { [key]: { utilization: 0..1, resetsAt?, minutes? } }, status?, at }` with keys `five_hour`, `seven_day` or `m<minutes>`. |
 | `GET /ui/<file>` | the sidebar's own files (`/ui/skillframe-chat.js`) |
 | `GET /health` | `{ ok: true, pages }`: `pages` is how many pages hold `/events` open. A desktop shell can stop the server once it drops to 0, instead of watching a browser process that may hand its window to another one. |
 
@@ -102,7 +105,8 @@ to sign in (markdown). `fork` says whether its chats can be forked.
 | `POST /chats/:id/send` | `{ text, shown?, screen?, files?: Attachment[] }` | `{ ok, queued, id? }`. `shown` is what the transcript displays instead of `text`; `screen` is passed to the host app's `context()`; `files` must be attachments this chat's `/upload` returned. While a reply runs, the message is queued (`queued: true`). |
 | `POST /chats/:id/upload` | `{ name, type, data }` (`data` base64) | the saved `Attachment` (a new name if one exists) |
 | `POST /chats/:id/answer` | `{ requestId, decision: Decision }` | `{ ok, ask }`; `404` if that card no longer waits |
-| `POST /chats/:id/settings` | `{ mode?, model? }` | the updated `ChatMeta`; applied to the running reply where the agent can |
+| `POST /chats/:id/settings` | `{ mode?, model?, effort? }` | the updated `ChatMeta`; mode and model apply to the running reply where the agent can, effort from the next message. `""` goes back to the agent's own choice. |
+| `POST /chats/:id/title` | `{ title }` | the renamed `ChatMeta` |
 | `POST /chats/:id/agent` | `{ agent }` | the updated `ChatMeta`; `409` once the chat has started |
 | `POST /chats/:id/fork` | `{ at }` (index of an assistant message) | the new `ChatMeta`, holding the messages up to `at`; `409` when the agent can't fork or `at` isn't a reply |
 | `POST /chats/:id/cancel` | `{}` | `{ ok: true }`; a real interrupt, then a kill if the agent does not stop |
@@ -147,6 +151,7 @@ seconds to keep the stream open.
 | `chat.tasks` | `{ chat, tasks }` | the agent's task list changed |
 | `chat.meta` | `{ chat, meta }` | the chat's settings changed |
 | `agent.info` | `{ agent, modes, models }` | an agent reported what it offers (ACP agents, in their first chat) |
+| `agent.limits` | `{ agent, limits }` | the agent reported its plan's usage (Claude Code's `rate_limit_event`, Codex's `account/rateLimits/updated`) |
 | `app.tool` | `{ name, args, chat }` | the agent called one of the host app's tools |
 | `file.changed` | `{ path, hash, by: "agent" \| "outside" \| "app" }` | a watched file changed. `by` is a best guess: `agent` while a reply runs |
 | `sf` | `{ name, data }` | the host app's own event (`sf.publish(name, data)`); the sidebar fires it as `sf:<name>` |
@@ -154,3 +159,4 @@ seconds to keep the stream open.
 ## Changes
 
 - v0 (2026-11-01): first version, M1–M3.
+- v0 (2026-11-03): `effort`, `modelUsed` and `context` on chats; `/agents/:id/options` answers everything the agent reports (models with effort levels, commands, account, limits); `POST /chats/:id/title`; `GET /health`; the `agent.limits` event.

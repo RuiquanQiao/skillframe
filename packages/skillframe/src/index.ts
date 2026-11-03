@@ -19,8 +19,9 @@ export { Conflict, type FileVersion } from "./files.js";
 export { appDataDir } from "./paths.js";
 export type { ChatMeta, Message, Block, AskBlock, ToolBlock, Decision, Attachment, Task } from "./chat/types.js";
 import type { Attachment, ChatMeta } from "./chat/types.js";
-import { AGENTS, agentCommand, agentDef } from "./agents.js";
-import { codexModels } from "./drivers/codex.js";
+import { AGENTS, agentCommand, agentDef, type AgentDef } from "./agents.js";
+import { InfoCache, probeClaude, probeCodex, type AgentInfo, type ModelInfo } from "./info.js";
+export type { AgentInfo, ModelInfo, Limits, UsageWindow } from "./info.js";
 
 export interface ContextInfo {
   chatId: string;
@@ -83,8 +84,8 @@ export interface Core {
   files?: FileChannel;
   appInfo(): unknown;
   send(chatId: string, input: SendInput): Promise<{ queued: boolean; id?: string }>;
-  /** the modes and models an agent offers, for the sidebar's pickers */
-  agentOptions(agentId: string): Promise<{ modes: { id: string; name: string; desc?: string }[]; models: { id: string; name: string; desc?: string }[] }>;
+  /** what an agent offers (modes, models with their effort levels, commands) and its plan's usage, for the sidebar */
+  agentOptions(agentId: string, refresh?: boolean): Promise<Omit<AgentInfo, "signedIn"> & { signedIn?: boolean }>;
   /** a new chat that goes on from reply number `at` (an index into the messages) of another */
   fork(chatId: string, at: number): ChatMeta;
 }
@@ -141,7 +142,15 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
     : undefined;
   files?.start();
 
-  let codexModelsCache: Promise<{ id: string; name: string; desc?: string }[]> | undefined;
+  const infos = new InfoCache(path.join(dataDir, "agents"));
+  const ask = (def: AgentDef) => {
+    const cmd = agentCommand(def, o.env);
+    const env = o.env ?? process.env;
+    if (!cmd) return null;
+    if (def.protocol === "claude") return () => probeClaude(cmd, { cwd: workspace, env });
+    if (def.protocol === "codex") return () => probeCodex(cmd, { cwd: workspace, env });
+    return null; // ACP agents report theirs when a session opens
+  };
 
   const core: Core = {
     basePath,
@@ -173,17 +182,29 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
         onDone: input.onDone,
       });
     },
-    async agentOptions(agentId) {
+    async agentOptions(agentId, refresh = false) {
       const def = AGENTS.find((a) => a.id === agentId && agentIds.includes(a.id));
       if (!def) throw new NotFound(`Unknown agent ${agentId}`);
-      const learned = runner.learned.get(def.id);
-      let models = learned?.models.length ? learned.models : def.models;
-      if (def.protocol === "codex" && !models.length) {
-        const cmd = agentCommand(def, o.env);
-        models = cmd ? await (codexModelsCache ??= codexModels(cmd, o.env ?? process.env)) : [];
-        if (!models.length) codexModelsCache = undefined; // try again next time
+      const asker = ask(def);
+      if (asker) {
+        // never asked: wait for the answer. Asked before: answer from the last one, ask again behind it
+        const pending = infos.age(def.id) > 300 || refresh ? infos.refresh(def.id, asker) : null;
+        if (pending && (!infos.get(def.id) || refresh)) await pending;
       }
-      return { modes: learned?.modes.length ? learned.modes : def.modes, models };
+      const info = infos.get(def.id) ?? {};
+      const learned = runner.learned.get(def.id);
+      const models: ModelInfo[] = learned?.models.length
+        ? learned.models.map((m) => ({ efforts: [], ...m }))
+        : info.models?.length ? info.models : def.models.map((m) => ({ ...m, efforts: [] }));
+      return {
+        modes: learned?.modes.length ? learned.modes : def.modes,
+        models,
+        defaultModel: info.defaultModel,
+        commands: info.commands ?? [],
+        account: info.account,
+        signedIn: info.signedIn,
+        limits: runner.limits.get(def.id) ?? info.limits,
+      };
     },
     fork(chatId, at) {
       const meta = store.meta(chatId);

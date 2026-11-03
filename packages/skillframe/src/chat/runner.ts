@@ -9,7 +9,8 @@ import type { Driver, McpLink, TurnSpec } from "../drivers/driver.js";
 import { driverFor } from "../drivers/index.js";
 import type { ChatStore } from "./store.js";
 import path from "node:path";
-import type { AskBlock, Attachment, Block, Decision, Message, Task, ToolBlock, UserMessage } from "./types.js";
+import type { AskBlock, Attachment, Block, ContextUse, Decision, Message, Task, ToolBlock, UserMessage } from "./types.js";
+import type { Limits } from "../info.js";
 
 const now = () => Math.round(Date.now()) / 1000;
 const STDERR_CAP = 20_000;
@@ -32,6 +33,8 @@ export class Turn {
   proc?: ChildProcess;
   driver!: Driver;
   runner!: ChatRunner;
+  /** the chat's agent id */
+  agent = "";
   /** the driver's own (thread / turn ids, RPC numbering…) */
   state: Record<string, any> = {};
   cancelled = false;
@@ -45,6 +48,8 @@ export class Turn {
   replyStartedAt = now();
   /** where the agent's session stands after the current reply (a fork point) */
   point?: string;
+  /** the context window's use as the agent last reported it (saved on the chat with each reply) */
+  usage?: ContextUse;
 
   constructor(
     readonly chatId: string,
@@ -96,6 +101,8 @@ export class ChatRunner {
   readonly turns = new Map<string, Turn>();
   /** modes and models each agent reported about itself */
   readonly learned = new Map<string, AgentOptions>();
+  /** each agent's plan usage, as its last reply reported it */
+  readonly limits = new Map<string, Limits>();
 
   constructor(readonly opts: RunnerOptions) {}
 
@@ -142,6 +149,7 @@ export class ChatRunner {
     turn = new Turn(chatId, o.onDone);
     turn.driver = driverFor(def);
     turn.runner = this;
+    turn.agent = def.id;
     this.turns.set(chatId, turn);
     const spec: TurnSpec = {
       chat,
@@ -170,7 +178,7 @@ export class ChatRunner {
   }
 
   /** a picker changed: kept on the chat for its next replies, and applied to the running one where the agent can */
-  settings(chatId: string, change: { mode?: string; model?: string }): void {
+  settings(chatId: string, change: { mode?: string; model?: string; effort?: string }): void {
     if (!this.store.meta(chatId)) throw new NotFound("Chat not found");
     this.store.update(chatId, change, false);
     const turn = this.turns.get(chatId);
@@ -283,6 +291,12 @@ export class ChatRunner {
       ...(turn.point ? { point: turn.point } : {}),
     };
     this.store.append(turn.chatId, msg);
+    // a window alone (or nothing) would wipe the last known use
+    if (turn.usage && (turn.usage.used !== null || turn.usage.compacted)) {
+      const before = this.store.meta(turn.chatId)?.context;
+      this.store.update(turn.chatId, { context: { ...turn.usage, window: turn.usage.window ?? before?.window ?? null } }, false);
+      this.emit("chat.meta", turn.chatId, { meta: this.store.meta(turn.chatId) });
+    }
     turn.error = turn.error ?? error;
     turn.flushedAny = true;
     turn.blocks = [];
@@ -349,6 +363,12 @@ export class ChatRunner {
     const before = JSON.stringify(this.learned.get(agentId));
     this.learned.set(agentId, options);
     if (JSON.stringify(options) !== before) this.opts.bus.publish("agent.info", { agent: agentId, ...options });
+  }
+
+  /** an agent reported its plan's usage limits */
+  setLimits(agentId: string, limits: Limits): void {
+    this.limits.set(agentId, limits);
+    this.opts.bus.publish("agent.limits", { agent: agentId, limits });
   }
 
   ask(turn: Turn, ask: AskBlock): void {

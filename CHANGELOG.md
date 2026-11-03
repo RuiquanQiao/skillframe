@@ -5,6 +5,24 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
 
 ## Unreleased
 
+- The sidebar's controls are now read from the agent itself, as its own apps show them: Claude
+  Code's and Codex's full model lists (older ones under "More models", any model id by hand), the
+  effort levels each model has (Claude Code `--effort`, Codex `effort`), all permission modes
+  (Claude Code's Auto and Bypass permissions, Codex's Full access), the agent's slash commands and
+  skills (type `/`), and a ring with the context window's use and the plan's 5-hour and weekly
+  usage. Asked without a model call, and kept in `<dataDir>/agents/` so they show at once.
+- Every picker is the sidebar's own menu instead of a native `<select>`, with the desktop apps'
+  keys: arrows, 1-9, Esc; Shift+Tab switches the mode, Ctrl+Shift+M / I / E open the mode / model
+  / effort menus, Esc in the box stops a reply. Chats can be renamed and deleted from the header.
+  Replies show how long they took and can be copied; a finished run of steps folds into one line
+  ("Read 2 files, ran 1 command"); edit permission cards show the change as a diff; a denied step
+  can say what to do instead; question cards take an answer of the user's own.
+- `chat.setScreen(obj, label)`: an optional label shows above the box ("Claude sees: …").
+- Protocol: `effort`, `modelUsed` and `context` on chats, `POST /chats/:id/title`, `GET /health`,
+  the `agent.limits` event, and the richer `GET /agents/:id/options` (docs/PROTOCOL.md).
+- Repository only: the .exe windows no longer open on a stopped server ("127.0.0.1 refused to
+  connect" on the first open). The server now lives while a page holds its event stream, not
+  while the browser process that was started does: Edge with Startup boost ends that one at once.
 - Repository only: `npm run exe` now puts the .exe files in `demos/` instead of the repository
   root, and `skillframe.exe` has the skillframe icon (`docs/media/icon.svg`, made into an .ico by
   `node scripts/render-icon.mjs`). The blank example's window shows the same icon.

@@ -11,6 +11,7 @@ import type { AskBlock, Attachment, Decision } from "../chat/types.js";
 import type { Driver, ReplyEnd, TurnSpec } from "./driver.js";
 import { createInterface } from "node:readline";
 import { kill, start, type Command } from "../spawn.js";
+import { codexLimits } from "../info.js";
 
 type Obj = Record<string, any>;
 
@@ -20,6 +21,7 @@ const MODES: Record<string, Obj> = {
   plan: { approvalPolicy: "on-request", sandbox: "read-only" },
   default: { approvalPolicy: "untrusted", sandbox: "workspace-write" },
   acceptEdits: { approvalPolicy: "on-request", sandbox: "workspace-write" },
+  bypassPermissions: { approvalPolicy: "never", sandbox: "danger-full-access" },
 };
 const DEFAULT_MODE = MODES.acceptEdits;
 
@@ -156,7 +158,7 @@ export class CodexDriver implements Driver {
       if (e) return this.fail(turn, e);
       s.thread = r?.thread?.id;
       // a fork gets a thread of its own: from here on the chat resumes that one
-      turn.runner.store.update(turn.chatId, { sessionId: s.thread, fork: undefined }, false);
+      turn.runner.store.update(turn.chatId, { sessionId: s.thread, fork: undefined, ...(r?.model ? { modelUsed: r.model } : {}) }, false);
       turn.runner.emit("chat.init", turn.chatId, { model: r?.model });
       this.send(turn, spec.prompt, spec.images);
     };
@@ -174,6 +176,7 @@ export class CodexDriver implements Driver {
     const input = [{ type: "text", text: prompt || "(see image)" }, ...images.map((im) => ({ type: "localImage", path: im.path }))];
     const params: Obj = { threadId: s.thread, input, approvalPolicy: mode.approvalPolicy };
     if (chat.model) params.model = chat.model;
+    if (chat.effort) params.effort = chat.effort;
     return s.rpc.call("turn/start", params, (r: Obj, e: string | null) => {
       if (e) {
         turn.error = e;
@@ -274,6 +277,15 @@ export class CodexDriver implements Driver {
         break;
       case "thread/compacted":
         runner.block(turn, { type: "note", text: "Context compacted" });
+        break;
+      case "thread/tokenUsage/updated": {
+        const u: Obj = p.tokenUsage ?? {};
+        const last: Obj = u.last ?? {};
+        turn.usage = { used: Number(last.inputTokens ?? 0) + Number(last.outputTokens ?? 0), window: u.modelContextWindow ?? null };
+        break;
+      }
+      case "account/rateLimits/updated":
+        runner.setLimits(turn.agent, codexLimits(p.rateLimits ?? {}));
         break;
       case "error":
         if (!p.willRetry) s.error = p.error?.message ?? JSON.stringify(p.error ?? {});

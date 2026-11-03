@@ -163,7 +163,7 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
     }
   }
   const agentRoute = route.match(/^\/agents\/([\w-]+)\/options$/);
-  if (method === "GET" && agentRoute) return core.agentOptions(agentRoute[1]);
+  if (method === "GET" && agentRoute) return core.agentOptions(agentRoute[1], query.get("refresh") === "1");
   if (method === "GET" && route === "/chats") return { chats: store.list(), running: [...runner.turns.keys()] };
   if (method === "POST" && route === "/chats") {
     const agent = typeof b.agent === "string" && core.agentIds.includes(b.agent) ? b.agent : core.agentIds[0];
@@ -199,11 +199,27 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
     return store.saveFile(id, b.name, String(b.type ?? ""), Buffer.from(b.data, "base64"));
   }
   if (id && action === "/settings" && method === "POST") {
-    const change: { mode?: string; model?: string } = {};
+    const change: { mode?: string; model?: string; effort?: string } = {};
     if (typeof b.mode === "string") change.mode = b.mode;
-    if (typeof b.model === "string") change.model = b.model; // "" = the agent's default
+    // "" = the agent's default. A model id goes to the agent as one argument: keep it plain
+    if (typeof b.model === "string") {
+      if (b.model && !/^[A-Za-z0-9][\w.:/\-[\]]{0,120}$/.test(b.model)) throw new HttpError(400, "Not a model id");
+      change.model = b.model;
+    }
+    if (typeof b.effort === "string") {
+      if (b.effort && !/^[a-z]{2,12}$/.test(b.effort)) throw new HttpError(400, "Not an effort level");
+      change.effort = b.effort;
+    }
     runner.settings(id, change);
     return store.meta(id);
+  }
+  if (id && action === "/title" && method === "POST") {
+    const title = String(b.title ?? "").trim().slice(0, 120);
+    if (!title) throw new HttpError(400, "The title is empty");
+    if (!store.meta(id)) throw new NotFound("Chat not found");
+    const meta = store.update(id, { title }, false);
+    core.bus.publish("chat.meta", { chat: id, meta });
+    return meta;
   }
   if (id && action === "/fork" && method === "POST") return core.fork(id, Number(b.at));
   if (id && action === "/answer" && method === "POST") {

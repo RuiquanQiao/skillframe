@@ -12,8 +12,10 @@ import type { ChatRunner, Turn } from "../chat/runner.js";
 import { toolHint } from "../chat/runner.js";
 import type { AskBlock, Attachment, Decision, Task } from "../chat/types.js";
 import type { Driver, ReplyEnd, TurnSpec } from "./driver.js";
+import { claudeLimits } from "../info.js";
 
-export const MODES = ["default", "acceptEdits", "plan", "auto"];
+export const MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"];
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 
 type Obj = Record<string, any>;
 
@@ -41,6 +43,7 @@ export class ClaudeDriver implements Driver {
     if (spec.allowedTools.length) args.push("--allowedTools", spec.allowedTools.join(","));
     if (chat.mode && MODES.includes(chat.mode)) args.push("--permission-mode", chat.mode);
     if (chat.model) args.push("--model", chat.model);
+    if (chat.effort && EFFORTS.includes(chat.effort)) args.push("--effort", chat.effort);
     if (chat.sessionId) args.push("--resume", chat.sessionId);
     else if (chat.fork) {
       // a forked chat: branch the original session at the reply it was forked from
@@ -135,11 +138,17 @@ export class ClaudeDriver implements Driver {
       case "system":
         if (msg.subtype === "init") {
           // a fork's first reply has its own new session: from here on the chat resumes that one
-          runner.store.update(turn.chatId, { sessionId: msg.session_id ?? undefined, fork: undefined }, false);
+          runner.store.update(turn.chatId, { sessionId: msg.session_id ?? undefined, fork: undefined, ...(msg.model ? { modelUsed: msg.model } : {}) }, false);
           runner.emit("chat.init", turn.chatId, { model: msg.model, mode: msg.permissionMode, tools: msg.tools, mcp: msg.mcp_servers });
         } else if (msg.subtype === "compact_boundary") {
           runner.block(turn, { type: "note", text: "Context compacted" });
+          // the stream reports only the size before compacting; the new size comes with the next reply
+          turn.usage = { used: null, window: turn.usage?.window ?? null, compacted: true };
         }
+        return null;
+
+      case "rate_limit_event":
+        runner.setLimits(turn.agent, claudeLimits(msg.rate_limit_info ?? {}));
         return null;
 
       case "control_request":
@@ -170,6 +179,13 @@ export class ClaudeDriver implements Driver {
         if (msg.parent_tool_use_id) return null;
         const message = msg.message ?? {};
         if (msg.uuid) turn.point = msg.uuid; // --resume-session-at takes this to fork after this reply
+        const usage = message.usage;
+        if (usage && message.model !== "<synthetic>") {
+          // everything in the window for this call: the prompt (cached or not) and the answer
+          const used = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"].reduce((n, k) => n + Number(usage[k] ?? 0), 0);
+          turn.usage = { used, window: turn.usage?.window ?? null };
+          turn.state.model = message.model;
+        }
         for (const block of message.content ?? []) {
           // local commands (/context, /cost…) answer without streaming
           if (block.type === "text" && message.model === "<synthetic>" && block.text) runner.text(turn, block.text);
@@ -196,6 +212,10 @@ export class ClaudeDriver implements Driver {
         if (msg.session_id) runner.store.update(turn.chatId, { sessionId: msg.session_id }, false);
         // nothing streamed (older versions, some errors): fall back to the final text
         if (!turn.blocks.some((b) => b.type === "text") && msg.result && !msg.is_error) runner.text(turn, String(msg.result));
+        // the window's size comes with the result, per model
+        const byModel: Obj = msg.modelUsage ?? {};
+        const mu = byModel[turn.state.model] ?? Object.values(byModel)[0];
+        if (mu?.contextWindow) turn.usage = { ...(turn.usage ?? { used: null }), window: Number(mu.contextWindow) };
         let error: string | null = null;
         if (msg.is_error || (msg.subtype && msg.subtype !== "success")) {
           error = turn.cancelled ? null : String(msg.result || msg.errors?.join("\n") || "Claude Code reported an error");
