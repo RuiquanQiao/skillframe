@@ -88,6 +88,8 @@ sidebar shows the bare name either way.
 | `GET /agents/:id/options` | What the agent reports about itself, asked without a model call (`?refresh=1` asks again): `{ modes: Option[], models: Model[], defaultModel?, commands: { name, desc, hint }[], account?: { email?, plan? }, signedIn?, limits?: Limits }`. `Option = { id, name, desc? }`, `Model = Option & { efforts: string[], more?: true }` (`more`: listed under "More models"), `Limits = { windows: { [key]: { utilization: 0..1, resetsAt?, minutes? } }, status?, at }` with keys `five_hour`, `seven_day` or `m<minutes>`. |
 | `GET /ui/<file>` | the sidebar's own files (`/ui/skillframe-chat.js`) |
 | `GET /health` | `{ ok: true, pages }`: `pages` is how many pages hold `/events` open. A desktop shell can stop the server once it drops to 0, instead of watching a browser process that may hand its window to another one. |
+| `POST /publish` | `{ name, data }` from the host app's own server (any language): every open page gets an `sf` event, and the sidebar fires `sf:<name>`. `name` is a word. |
+| `GET /workspace/files?q=` | `{ files: string[] }`: up to 50 paths in the agent's folder (relative, `/`-separated) containing every word of `q`, for "@" in the box. Dot folders, `node_modules` and build output are skipped; names only, never contents. |
 
 `AgentInfo = { id, name, installed, signedIn: boolean | null, install, login, fork }`.
 `signedIn` is a guess from where the agent keeps its own login (`null`: can't tell without asking it);
@@ -159,4 +161,4 @@ seconds to keep the stream open.
 ## Changes
 
 - v0 (2026-11-01): first version, M1–M3.
-- v0 (2026-11-03): `effort`, `modelUsed` and `context` on chats; `/agents/:id/options` answers everything the agent reports (models with effort levels, commands, account, limits); `POST /chats/:id/title`; `GET /health`; the `agent.limits` event.
+- v0 (2026-11-03): `effort`, `modelUsed` and `context` on chats; `/agents/:id/options` answers everything the agent reports (models with effort levels, commands, account, limits); `POST /chats/:id/title`; `GET /health`; `POST /publish`; `GET /workspace/files`; the `agent.limits` event.

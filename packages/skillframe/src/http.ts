@@ -5,7 +5,7 @@
 // was made for: the Host header must be a loopback name (no DNS rebinding), anything that changes
 // state must come from the same origin as JSON (a web page elsewhere can neither send it nor read
 // the answer), and the MCP endpoint wants the token only our own agent processes were given.
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { IMAGE_TYPES } from "./chat/store.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
@@ -134,6 +134,33 @@ function parseJson(text: string): Record<string, any> {
   throw new HttpError(400, "The body must be a JSON object");
 }
 
+const SKIP = /^(node_modules|\.git|dist|build|out|target|__pycache__|\.venv|venv|\.next|\.cache)$/;
+
+/** up to 50 paths under `root` (relative, with /) whose path contains every word of `q`; dot folders and build output are skipped */
+export function findFiles(root: string, q: string): string[] {
+  const words = q.toLowerCase().split(/[\s/\\]+/).filter(Boolean);
+  const out: string[] = [];
+  let seen = 0;
+  const walk = (dir: string, rel: string) => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => Number(b.isFile()) - Number(a.isFile()) || a.name.localeCompare(b.name));
+    for (const e of entries) {
+      if (out.length >= 50 || ++seen > 5000) return;
+      if (e.name.startsWith(".") || SKIP.test(e.name)) continue;
+      const p = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(dir, e.name), p);
+      else if (words.every((w) => p.toLowerCase().includes(w))) out.push(p);
+    }
+  };
+  walk(root, "");
+  return out;
+}
+
 /** returned by routes that wrote the response themselves (files, the event stream) */
 const ANSWERED = Symbol("answered");
 
@@ -153,6 +180,14 @@ async function route_(core: Core, method: string, route: string, b: Record<strin
   }
   if (method === "GET" && route === "/app") return core.appInfo();
   if (method === "GET" && route === "/health") return { ok: true, pages: core.bus.pages };
+  // files in the agent's folder, for "@" in the message box (names only, never their contents)
+  if (method === "GET" && route === "/workspace/files") return { files: findFiles(core.workspace, query.get("q") ?? "") };
+  // the host app (in any language) pushes an event of its own to every open page
+  if (method === "POST" && route === "/publish") {
+    if (typeof b.name !== "string" || !/^[\w.:-]{1,64}$/.test(b.name)) throw new HttpError(400, "Send { name, data }; name is a word");
+    core.bus.publish("sf", { name: b.name, data: b.data ?? null });
+    return { ok: true };
+  }
   if (route === "/files") {
     if (!core.files) throw new HttpError(404, "This app shares no files with the agent");
     if (method === "GET") return core.files.read(query.get("path") ?? "");

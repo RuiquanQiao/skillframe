@@ -3,8 +3,9 @@
 //
 //   node scripts/window.mjs grill-me | hello | blank | studio [folder]
 //
-// It builds what the example needs, starts its server on a free port, opens the page in an Edge
-// (or Chrome) window without an address bar, and stops the server once no page of it is open.
+// It builds what the example needs, starts its server on a free port, opens the page in a native
+// window (demos/skillframe-window.exe, WebView2; `npm run exe` builds it), or in an Edge or Chrome
+// window without an address bar when that isn't built, and stops the server once no page of it is open.
 // Opening the same example again while it runs only opens another window on the same server.
 // Everything it keeps (the window's browser profile, the server's log) is in .cache/window/<app>/.
 import { spawn, spawnSync } from "node:child_process";
@@ -16,10 +17,12 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const apps = {
-  "grill-me": { build: ["packages/skillframe"], server: "examples/grill-me/server.js" },
-  hello: { build: ["packages/skillframe", "examples/hello"], server: "examples/hello/dist/server.js" },
-  blank: { build: ["packages/skillframe"], server: "examples/blank/server.js" },
-  studio: { build: ["packages/skillframe"], server: "examples/studio/server.js" },
+  "grill-me": { title: "Grill Me", build: ["packages/skillframe"], server: "examples/grill-me/server.js" },
+  hello: { title: "Hello Notes", build: ["packages/skillframe", "examples/hello"], server: "examples/hello/dist/server.js" },
+  blank: { title: "skillframe", build: ["packages/skillframe"], server: "examples/blank/server.js" },
+  studio: { title: "skillframe Studio", build: ["packages/skillframe"], server: "examples/studio/server.js" },
+  // an app in another language: it starts `skillframe serve` itself
+  python: { title: "Python Todo", build: ["packages/skillframe"], command: ["python", "examples/python/app.py"] },
 };
 // the exit code a server uses to ask for a restart
 const RESTART = 75;
@@ -103,9 +106,10 @@ async function openPages(at) {
 
 /** starts the server on `port`; resolves with its address, or null if it didn't start */
 function start() {
-  const s = spawn(process.execPath, [path.join(root, app.server)], {
+  const [exe, ...args] = app.command ?? [process.execPath, app.server];
+  const s = spawn(exe, args.map((a) => (a.startsWith("examples/") ? path.join(root, a) : a)), {
     cwd: root,
-    env: { ...process.env, PORT: String(port), STUDIO_RESTARTABLE: "1", ...(folder ? { PROJECT: folder } : {}) },
+    env: { ...process.env, PORT: String(port), PYTHONIOENCODING: "utf-8", STUDIO_RESTARTABLE: "1", ...(folder ? { PROJECT: folder } : {}) },
     stdio: ["ignore", "pipe", openSync(log, "a")],
     windowsHide: true,
   });
@@ -133,6 +137,10 @@ function start() {
 }
 
 function openWindow(at) {
+  if (browser.endsWith("skillframe-window.exe")) {
+    const args = ["--url", at, "--title", app.title, "--data", path.join(home, "webview"), "--icon", path.join(root, "scripts", "launcher", "skillframe.ico")];
+    return spawn(browser, args, { stdio: "ignore", detached: true });
+  }
   const args = [
     `--app=${at}`,
     `--user-data-dir=${path.join(home, "profile")}`,
@@ -146,6 +154,8 @@ function openWindow(at) {
 }
 
 function findBrowser() {
+  const native = path.join(root, "demos", "skillframe-window.exe");
+  if (process.platform === "win32" && existsSync(native)) return native;
   const bases = [process.env["ProgramFiles(x86)"], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
   for (const rel of ["Microsoft\\Edge\\Application\\msedge.exe", "Google\\Chrome\\Application\\chrome.exe"])
     for (const base of bases) if (existsSync(path.join(base, rel))) return path.join(base, rel);

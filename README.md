@@ -134,6 +134,38 @@ Your page reads and writes the shared files too: `GET /sf/files?path=todos.json`
 `{ text, hash }`; `POST /sf/files` with `{ path, text, baseHash }` answers 409 with the newer
 version instead of overwriting the agent's edit.
 
+### Any language (Python, Go, Rust…)
+
+Your app doesn't import skillframe. It describes its abilities in `skillframe.json`, each one a
+route of its own server, and starts `npx skillframe serve` beside itself (Node 22 has to be on the
+machine, as it is wherever Claude Code or Codex is):
+
+```json
+{
+  "appName": "Todo",
+  "watch": ["todos.json"],
+  "context": "/agent/context",
+  "tools": {
+    "add_todo": { "description": "Add a todo", "input": { "text": "string" }, "url": "/agent/add_todo" }
+  }
+}
+```
+
+```bash
+npx skillframe serve skillframe.json --app http://127.0.0.1:5000 --parent <your pid>
+```
+
+- Open the address it prints: requests that aren't skillframe's go to your server (`--app`), so the
+  page is yours; it adds `<skillframe-chat>` with the script tag shown below.
+- A tool is called with `POST {"args": {…}, "chatId": "…"}`; your answer (text or JSON) goes back to
+  the agent, and a status of 400 or more is a failed call it can read. `context` gets
+  `POST {"chatId", "screen"}` before each message and answers in words.
+- `POST /sf/publish {"name", "data"}` sends your own event to the page; `--parent` ends skillframe
+  with your process. Tools and the app must be on this computer (`127.0.0.1`).
+
+[examples/python](examples/python) is a complete todo app in Python's standard library
+(`npm run python`).
+
 ### Already have a server, or a desktop shell
 
 ```js
@@ -331,9 +363,10 @@ own tools are pre-approved; anything else follows the agent's own permission rul
 <details>
 <summary><b>My backend isn't Node. Can I still use it?</b></summary>
 
-The sidebar only talks HTTP and server-sent events, described in [docs/PROTOCOL.md](docs/PROTOCOL.md).
-Today the core that speaks to the agents is the Node package; a backend in another language can
-run it as a small sidecar process, or reimplement the protocol.
+Yes, without writing any JavaScript: see [Any language](#any-language-python-go-rust). Your app
+writes a `skillframe.json` and starts `npx skillframe serve` next to itself; its tools are routes
+of its own server. The sidebar itself only talks HTTP and server-sent events
+([docs/PROTOCOL.md](docs/PROTOCOL.md)), so a backend can also implement that directly.
 
 </details>
 
@@ -371,6 +404,8 @@ Windows, macOS and Linux, on Node 22 and 24.
 - `examples/studio`: build an app inside skillframe. Open a project folder; the agent works in it
   and the project's page runs beside the chat, reloading when a file changes and passing its
   errors to the agent (`npm run studio -- <folder>`)
+- `examples/python`: a todo app in Python (standard library only) with `skillframe serve` beside it;
+  the agent's tool calls are Python functions behind the app's own routes (`npm run python`)
 - `examples/electron`: the same sidebar in an Electron window (`cd examples/electron && npm install && npm start`)
 
 Apps given an agent with skillframe, each in its own repository:
@@ -379,10 +414,11 @@ Apps given an agent with skillframe, each in its own repository:
   usage viewer [Space Radar](https://github.com/zz85/space-radar); the agent reads the scan, finds
   out what each big folder is, points at it in the chart and moves what you approve to the Recycle Bin
 
-On Windows, `npm run exe` makes `skillframe.exe`, `skillframe Studio.exe`, `Grill Me.exe` and
-`Hello Notes.exe` in the `demos` folder. Each opens its example in a window of its own, without a terminal, and stops it
-when the window closes. They need Node.js and `npm install`, and stay inside the repository folder (a shortcut to
-them can go anywhere).
+On Windows, `npm run exe` makes `skillframe.exe`, `skillframe Studio.exe`, `Grill Me.exe`,
+`Hello Notes.exe` and `Python Todo.exe` in the `demos` folder. Each opens its example in a native
+window of its own (WebView2, which Windows ships; the build fetches Microsoft's WebView2 SDK once),
+without a terminal, and stops it when the window closes. They need Node.js and `npm install`, and
+stay inside the repository folder (a shortcut to them can go anywhere).
 
 ## Roadmap
 

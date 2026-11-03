@@ -16,7 +16,8 @@
     "grill": "tsc -b packages/skillframe && node examples/grill-me/server.js",
     "blank": "tsc -b packages/skillframe && node examples/blank/server.js",
     "studio": "tsc -b packages/skillframe && node examples/studio/server.js",
-    "exe": "node scripts/build-exe.mjs"
+    "exe": "node scripts/build-exe.mjs",
+    "python": "tsc -b packages/skillframe && python examples/python/app.py"
   },
   "engines": {
     "node": ">=22"

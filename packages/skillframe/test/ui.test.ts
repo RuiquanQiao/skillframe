@@ -2,6 +2,7 @@
 // fake agents: every card, the pickers, attachments, forks, and whether anything spills out of
 // the sidebar at narrow and wide sizes, in light and dark.
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import type { Page } from "playwright-core";
@@ -421,6 +422,36 @@ describe("the sidebar in a browser", async () => {
       }
       assert.deepEqual(await spills(page), { out: [], sideways: false, page: false }, colorScheme);
     }
+    await page.close();
+  });
+
+  test("@ lists the working folder's files (not node_modules or .git); Enter puts the path in", { skip: !browser }, async () => {
+    for (const f of ["docs/notes.md", "node_modules/x/notes.md", ".git/notes.md", "src/main.py"]) {
+      mkdirSync(path.dirname(path.join(sf.workspace, f)), { recursive: true });
+      writeFileSync(path.join(sf.workspace, f), "x");
+    }
+    const { page } = await open();
+    const box = page.locator("skillframe-chat textarea");
+    await box.fill("look at @note");
+    const pop = page.locator("skillframe-chat .pop.slash");
+    await pop.locator(".mi.active", { hasText: "docs/notes.md" }).waitFor();
+    assert.equal(await pop.locator(".mi").count(), 1, "only the project's own file");
+    await box.press("Enter");
+    assert.equal(await box.inputValue(), "look at @docs/notes.md ");
+    assert.equal(await page.locator("skillframe-chat .user").count(), 0, "Enter picked the file, it didn't send");
+    await page.close();
+  });
+
+  test("a reply that ends while the user is in another window marks the title until they come back", { skip: !browser }, async () => {
+    const { page } = await open();
+    await page.evaluate(() => {
+      document.title = "My App";
+      document.hasFocus = () => false; // the user is in another window
+    });
+    await say(page, "hello");
+    await page.waitForFunction(() => document.title === "● My App");
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    assert.equal(await page.title(), "My App");
     await page.close();
   });
 

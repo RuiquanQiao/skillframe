@@ -75,6 +75,8 @@ function slug(name: string): string {
 
 export interface Core {
   basePath: string;
+  /** the agent's working folder */
+  workspace: string;
   allowedHosts: string[];
   agentIds: string[];
   bus: EventBus;
@@ -154,6 +156,7 @@ export function createSkillframe(o: SkillframeOptions): Skillframe {
 
   const core: Core = {
     basePath,
+    workspace,
     allowedHosts: (o.allowedHosts ?? ["localhost", "127.0.0.1", "[::1]"]).map((h) => h.toLowerCase()),
     agentIds,
     bus,

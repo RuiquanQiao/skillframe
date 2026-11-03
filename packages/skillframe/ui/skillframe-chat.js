@@ -10,7 +10,9 @@
 //                                       (optional) is shown above the box: "Claude sees: …"
 //   await chat.ask({ prompt, shown })   start a turn from your own button; resolves { ok, error }
 //   chat.newChat()
-//   events: "chat-done" ({ ok, error }), "file-changed", and "sf:<name>" for every sf.publish(name, data)
+//   events: "chat-done" ({ ok, error }), "attention" ({ why: "done" | "waiting", chat }), "file-changed",
+//           and "sf:<name>" for every sf.publish(name, data)
+//   attention="off": don't mark the page's title while the user is in another window
 //
 // Keys: Enter sends, Shift+Enter breaks the line, Esc stops a reply, Shift+Tab switches the
 // permission mode, Ctrl+Shift+M / I / E open the mode / model / effort menus, / lists commands.
@@ -98,6 +100,7 @@ const STRINGS = {
     ringTip: "Context and plan usage",
     sees: "{agent} sees",
     commands: "Commands",
+    files: "Files in the working folder",
     cmdModel: "Switch the model",
     cmdEffort: "Set the effort level",
     cmdMode: "Switch the permission mode",
@@ -230,6 +233,7 @@ const STRINGS = {
     ringTip: "上下文和套餐用量",
     sees: "{agent} 知道你正在看",
     commands: "命令",
+    files: "工作文件夹里的文件",
     cmdModel: "切换模型",
     cmdEffort: "设置思考强度",
     cmdMode: "切换权限模式",
@@ -915,6 +919,7 @@ class SkillframeChat extends HTMLElement {
     on("chat.ask", (d) => {
       if (d.chat === this.state.chatId) upsert(d.ask);
       else this.renderBar();
+      if (d.ask?.status === "pending") this.attention("waiting", d.chat);
     });
     on("chat.block", mine((d) => {
       this.ensureLive().blocks.push(d.block);
@@ -934,6 +939,7 @@ class SkillframeChat extends HTMLElement {
         resolve({ ok: d.ok, error: d.error });
       }
       this.dispatchEvent(new CustomEvent("chat-done", { detail: d }));
+      this.attention("done", d.chat);
       if (d.chat === this.state.chatId) this.open(d.chat, true);
       this.refreshChats().then(() => this.renderBar());
     });
@@ -1473,17 +1479,36 @@ class SkillframeChat extends HTMLElement {
     return [...local, ...own];
   }
 
+  /** the box starts with "/": commands. A word starting with "@" at the caret: files in the agent's folder */
   updateSlash() {
     const v = this.input.value;
     const m = v.match(/^\/(\S*)$/);
-    if (!m) {
-      if (this.slash) this.closePop();
+    if (m) {
+      const q = m[1].toLowerCase();
+      const list = this.commandList().filter((c) => c.name.toLowerCase().includes(q))
+        .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)))
+        .slice(0, 40);
+      return this.suggest(list, this.t("commands"));
+    }
+    const caret = this.input.selectionStart ?? v.length;
+    const at = v.slice(0, caret).match(/(^|\s)@([^\s@]*)$/);
+    if (at && this.state.app) {
+      const ask = (this.mentionAsk = (this.mentionAsk ?? 0) + 1);
+      this.mention = { start: caret - at[2].length - 1, end: caret };
+      clearTimeout(this.mentionTimer);
+      this.mentionTimer = setTimeout(async () => {
+        const r = await this.api("GET", `/workspace/files?q=${encodeURIComponent(at[2])}`).catch(() => ({ files: [] }));
+        // a later keystroke asked again: this answer is stale
+        if (ask === this.mentionAsk) this.suggest(r.files.map((f) => ({ file: f })), this.t("files"));
+      }, 80);
       return;
     }
-    const q = m[1].toLowerCase();
-    const list = this.commandList().filter((c) => c.name.toLowerCase().includes(q))
-      .sort((a, b) => Number(!a.name.toLowerCase().startsWith(q)) - Number(!b.name.toLowerCase().startsWith(q)))
-      .slice(0, 40);
+    this.mention = null;
+    if (this.slash) this.closePop();
+  }
+
+  /** the list under the caret's word (commands or files), driven from the box by the arrow keys */
+  suggest(list, head) {
     if (!list.length) {
       if (this.slash) this.closePop();
       return;
@@ -1493,9 +1518,11 @@ class SkillframeChat extends HTMLElement {
     if (this.slash) this.pop.panel.remove();
     this.pop = null;
     this.openPop(this.boxNode, (p) => {
-      p.append(h("div", { class: "head" }, this.t("commands")));
+      p.append(h("div", { class: "head" }, head));
       list.forEach((c, i) => {
-        const b = this.item({ label: `/${c.name}${c.hint ? " " + c.hint : ""}`, desc: c.desc, onPick: () => this.applySlash(c) });
+        const b = c.file
+          ? this.item({ label: c.file.split("/").pop(), desc: c.file, onPick: () => this.applySlash(c) })
+          : this.item({ label: `/${c.name}${c.hint ? " " + c.hint : ""}`, desc: c.desc, onPick: () => this.applySlash(c) });
         b.tabIndex = -1;
         b.id = `slash-${i}`;
         if (i === active) b.classList.add("active");
@@ -1518,6 +1545,18 @@ class SkillframeChat extends HTMLElement {
   applySlash(c = this.slash?.list[this.slash.active]) {
     if (!c) return;
     this.closePop();
+    if (c.file && this.mention) {
+      // the "@word" becomes "@path ", the caret after it; a path with spaces goes in quotes
+      const v = this.input.value;
+      const text = /\s/.test(c.file) ? `@"${c.file}" ` : `@${c.file} `;
+      this.input.value = v.slice(0, this.mention.start) + text + v.slice(this.mention.end);
+      const at = this.mention.start + text.length;
+      this.mention = null;
+      this.input.focus();
+      this.input.setSelectionRange(at, at);
+      this.autosize();
+      return;
+    }
     if (c.local && !c.hint) {
       this.input.value = "";
       this.autosize();
@@ -1550,6 +1589,25 @@ class SkillframeChat extends HTMLElement {
       else this.openModelMenu(bar.querySelector(".model-btn") ?? bar, true);
     }
     return true;
+  }
+
+  /**
+   * A reply ended, or the agent waits for an answer, while the user is in another window: "● " in
+   * front of the page's title until they come back (a desktop shell can flash its taskbar button on
+   * it; skillframe's own window does). attention="off" leaves the title alone; the "attention" event
+   * fires either way.
+   */
+  attention(why, chatId) {
+    this.dispatchEvent(new CustomEvent("attention", { detail: { why, chat: chatId } }));
+    if (this.getAttribute("attention") === "off" || (document.hasFocus() && !document.hidden) || this.titleBefore != null) return;
+    this.titleBefore = document.title;
+    document.title = `● ${document.title}`;
+    const back = () => {
+      if (document.title === `● ${this.titleBefore}`) document.title = this.titleBefore;
+      this.titleBefore = null;
+      window.removeEventListener("focus", back);
+    };
+    window.addEventListener("focus", back);
   }
 
   fail(e) {

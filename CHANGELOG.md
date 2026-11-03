@@ -5,6 +5,20 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
 
 ## Unreleased
 
+- `npx skillframe serve [skillframe.json]`: skillframe for an app in any language. The app's tools
+  and context are routes of its own server, described in `skillframe.json`; requests that aren't
+  skillframe's go to the app (`--app`), `--parent` ends skillframe with the app. New example:
+  `examples/python` (standard library only, `npm run python`).
+- Protocol: `POST /sf/publish { name, data }` (the host app's own event, from any language) and
+  `GET /sf/workspace/files?q=` (for "@").
+- The sidebar: type `@` to put a file of the working folder in the message. A reply that ends, or
+  an agent that waits for an answer, while the user is in another window puts "● " in front of the
+  page's title until they come back (`attention="off"` turns this off; the `attention` event fires
+  either way).
+- examples/studio speaks Chinese in a Chinese browser.
+- Repository only: the .exe demos open in a native window (`demos/skillframe-window.exe`, WebView2)
+  instead of an Edge window, flashing its taskbar button when the agent is done or waiting;
+  `Python Todo.exe` is new.
 - The sidebar's controls are now read from the agent itself, as its own apps show them: Claude
   Code's and Codex's full model lists (older ones under "More models", any model id by hand), the
   effort levels each model has (Claude Code `--effort`, Codex `effort`), all permission modes

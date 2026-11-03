@@ -71,7 +71,7 @@ describe("examples/grill-me", async () => {
   });
 
   test("a whole session in the browser: start, two rounds, a changed answer, the summary", { skip: browser ? false : "no Chrome, Edge or Playwright Chromium on this machine" }, async () => {
-    page = await browser!.newPage({ viewport: { width: 1280, height: 800 } });
+    page = await browser!.newPage({ viewport: { width: 1280, height: 800 }, locale: "en-US" });
     page.setDefaultTimeout(10_000);
     await page.goto(url + "/");
 
@@ -225,12 +225,22 @@ describe("examples/studio", async () => {
     assert.deepEqual((await state()).recent.slice(0, 2), [site, other]);
   });
 
+  test("in a Chinese browser, Studio's own controls are in Chinese", { skip: browser ? false : "no Chrome, Edge or Playwright Chromium on this machine" }, async () => {
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 }, locale: "zh-CN" });
+    await page.goto(url + "/");
+    await page.locator("#switch", { hasText: "换文件夹" }).waitFor();
+    assert.equal(await page.locator("#reload").textContent(), "刷新");
+    assert.equal(await page.locator("#start h1").textContent(), "打开一个项目");
+    assert.equal(await page.locator("#folder").getAttribute("placeholder"), "粘贴文件夹路径，例如 E:\\Projects\\my-site");
+    await page.close();
+  });
+
   test("show_in_preview only takes addresses on this computer", async () => {
     assert.match(await call(url, "show_in_preview", { url: "https://example.com" }, "error"), /localhost/);
   });
 
   test("in the browser: the page runs beside the sidebar, its errors show up, and the agent can change what it shows", { skip: browser ? false : "no Chrome, Edge or Playwright Chromium on this machine" }, async () => {
-    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 } });
+    const page = await browser!.newPage({ viewport: { width: 1280, height: 800 }, locale: "en-US" });
     page.setDefaultTimeout(10_000);
     await page.goto(url + "/");
     const view = page.frameLocator("#view");

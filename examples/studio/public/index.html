@@ -134,6 +134,21 @@
 
   <script type="module">
     const $ = (id) => document.getElementById(id);
+    // the page speaks the browser's language: English, or Chinese
+    const ZH = (navigator.language || "").toLowerCase().startsWith("zh");
+    const L = (en, zh) => (ZH ? zh : en);
+    if (ZH) {
+      document.documentElement.lang = "zh";
+      const text = { "#start h1": "打开一个项目", "#start > div > p": "Agent 在你打开的文件夹里干活，旁边运行这个项目的页面。文件一改，页面就会刷新。", "#browse": "浏览…",
+        "#open-form button[type=submit]": "打开", "#recent h2": "最近打开", "#cancel": "回到项目", "#reload": "刷新", "#open-out": "在浏览器中打开", "#restart": "重启 Studio",
+        "#switch": "换文件夹", "#fix": "让 agent 修好这些", "#clear": "忽略", "#run-restart": "重启", "#logs-close": "关闭", "#cover-fix": "让 agent 修好它", "#cover-restart": "重启" };
+      for (const [sel, t] of Object.entries(text)) document.querySelector(sel).textContent = t;
+      const titles = { "#run-btn": "项目自己的服务器：看输出、重启", "#reload": "重新加载页面", "#open-out": "在你的浏览器里打开这个地址",
+        "#restart": "重启 Studio 自己的服务器（改了 Studio 的代码时用），对话不受影响" };
+      for (const [sel, t] of Object.entries(titles)) document.querySelector(sel).title = t;
+      $("folder").placeholder = String.raw`粘贴文件夹路径，例如 E:\Projects\my-site`;
+      $("folder").setAttribute("aria-label", "项目文件夹");
+    }
     // the start screen has no sidebar yet: this stream tells the window's script the page is open
     new EventSource("/sf/events");
     const state = await (await fetch("/studio/state")).json();
@@ -166,10 +181,14 @@
 
     async function openFolder(folder) {
       $("open-error").textContent = "";
-      if (!folder.trim()) return void ($("open-error").textContent = "Type or paste the path of a folder first.");
+      if (!folder.trim()) return void ($("open-error").textContent = L("Type or paste the path of a folder first.", "先输入或粘贴一个文件夹路径。"));
       const r = await fetch("/studio/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folder: folder.trim().replace(/^"|"$/g, "") }) });
       if (r.ok) location.reload();
-      else $("open-error").textContent = (await r.json()).error;
+      else {
+        const { error } = await r.json();
+        const bad = /^(.*) is not a folder\.$/.exec(error ?? "");
+        $("open-error").textContent = ZH && bad ? `找不到这个文件夹：${bad[1]}` : error;
+      }
     }
 
     $("open-form").onsubmit = (e) => { e.preventDefault(); openFolder($("folder").value); };
@@ -206,11 +225,11 @@
     }
 
     // what the agent hears with each message (and what the sidebar says it sees)
-    const tell = () => chat?.setScreen({ ...page, errors: errors.slice(-10) }, page.path ?? page.url ?? "");
+    const tell = () => chat?.setScreen({ ...page, errors: errors.slice(-10) }, page.title ? `${page.title} (${page.path ?? page.url})` : page.url ?? "");
 
     // ----- the project's own server (stacks.js): its state on a button, its output under it
     let run = null;
-    const RUN_TEXT = { installing: "installing", starting: "starting", running: "running", exited: "stopped" };
+    const RUN_TEXT = ZH ? { installing: "安装依赖中", starting: "启动中", running: "运行中", exited: "已停止" } : { installing: "installing", starting: "starting", running: "running", exited: "stopped" };
     function drawRun(st) {
       run = st;
       $("run-btn").hidden = !st;
@@ -222,8 +241,10 @@
       $("run-cmd").title = st.command;
       if (st.state !== "running") {
         $("cover").hidden = false;
-        $("cover-title").textContent = st.state === "exited" ? `${st.stack} stopped` : st.state === "installing" ? `Installing ${st.stack}'s dependencies…` : `Starting ${st.stack}…`;
-        $("cover-text").textContent = st.state === "exited" ? `"${st.command}" ended with code ${st.code}. Its last output:` : `Running "${st.command}". The page shows here once it is up.`;
+        $("cover-title").textContent = st.state === "exited" ? L(`${st.stack} stopped`, `${st.stack} 已停止`)
+          : st.state === "installing" ? L(`Installing ${st.stack}'s dependencies…`, `正在安装 ${st.stack} 的依赖…`) : L(`Starting ${st.stack}…`, `正在启动 ${st.stack}…`);
+        $("cover-text").textContent = st.state === "exited" ? L(`"${st.command}" ended with code ${st.code}. Its last output:`, `"${st.command}" 退出了（退出码 ${st.code}）。最后的输出：`)
+          : L(`Running "${st.command}". The page shows here once it is up.`, `正在运行 "${st.command}"，启动好后页面会显示在这里。`);
         $("cover-fix").hidden = st.state !== "exited";
       }
       loadLog();
@@ -251,7 +272,7 @@
     $("cover-restart").onclick = restartRun;
     $("cover-fix").onclick = () => chat.ask({
       prompt: `The project's server stopped ("${run.command}", exit code ${run.code}). Its last output:\n${$("cover-log").textContent.split("\n").slice(-40).join("\n")}\nFind the cause, fix it, then call restart_app.`,
-      shown: "Fix the server and restart it",
+      shown: L("Fix the server and restart it", "修好服务器并重启"),
     });
 
     addEventListener("message", (e) => {
@@ -268,7 +289,7 @@
 
     function drawErrors() {
       $("errors-btn").hidden = !errors.length;
-      $("errors-btn").textContent = errors.length === 1 ? "1 error" : `${errors.length} errors`;
+      $("errors-btn").textContent = ZH ? `${errors.length} 个错误` : errors.length === 1 ? "1 error" : `${errors.length} errors`;
       if (!errors.length) $("errors").hidden = true;
       $("errors").querySelector("ul").replaceChildren(...errors.slice(-20).map((t) => Object.assign(document.createElement("li"), { textContent: t })));
     }
@@ -276,7 +297,7 @@
     $("clear").onclick = () => { errors = []; drawErrors(); tell(); };
     $("fix").onclick = () => {
       $("errors").hidden = true;
-      chat.ask({ prompt: `The page in the main area shows these errors:\n${errors.map((t) => `- ${t}`).join("\n")}\nFind the cause and fix it.`, shown: "Fix the errors on the page" });
+      chat.ask({ prompt: `The page in the main area shows these errors:\n${errors.map((t) => `- ${t}`).join("\n")}\nFind the cause and fix it.`, shown: L("Fix the errors on the page", "修好页面上的错误") });
     };
 
     $("address").addEventListener("keydown", (e) => {
@@ -291,14 +312,14 @@
 
     $("restart").onclick = async () => {
       $("restart").disabled = true;
-      $("restart").textContent = "Restarting…";
+      $("restart").textContent = L("Restarting…", "正在重启…");
       await fetch("/studio/restart", { method: "POST" }).catch(() => {});
       await new Promise((r) => setTimeout(r, 500));
       for (let i = 0; i < 100; i++) {
         try { if ((await fetch("/studio/state")).ok) return location.reload(); } catch {}
         await new Promise((r) => setTimeout(r, 300));
       }
-      $("restart").textContent = "Server didn't come back";
+      $("restart").textContent = L("Server didn't come back", "服务器没能重新启动");
     };
 
     // the divider: drag it to give the sidebar or the page more room

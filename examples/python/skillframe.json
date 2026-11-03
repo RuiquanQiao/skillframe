@@ -1,0 +1,10 @@
+{
+  "appName": "Python Todo",
+  "watch": ["todos.json"],
+  "context": "/agent/context",
+  "tools": {
+    "add_todo": { "description": "Add a todo to the user's list.", "input": { "text": "string" }, "url": "/agent/add_todo" },
+    "complete_todo": { "description": "Mark a todo as done, by its id.", "input": { "id": "number" }, "url": "/agent/complete_todo" },
+    "list_todos": { "description": "The user's todos, as JSON: id, text, done.", "url": "/agent/list_todos" }
+  }
+}
