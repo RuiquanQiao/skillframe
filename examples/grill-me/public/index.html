@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Grill Me</title>
   <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root {
       color-scheme: light dark;
@@ -12,14 +13,22 @@
       --settled: #2f7a57; --open: #a86a12; --accent: #2f5bd3; --accent-ink: #ffffff; --wash: #e8eefb;
       font: 14px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     }
+    /* dark: the system's, unless the theme picked in the title bar's settings says otherwise (data-sf-theme) */
     @media (prefers-color-scheme: dark) {
-      :root {
+      :root:not([data-sf-theme="light"]) {
         --paper: #161a22; --surface: #1d222c; --ink: #e3e7ee; --muted: #9aa3b2; --line: #313846;
         --settled: #5cbf8d; --open: #e0a64a; --accent: #7d9cf0; --accent-ink: #10141c; --wash: #222a3b;
       }
     }
+    :root[data-sf-theme="dark"] {
+      --paper: #161a22; --surface: #1d222c; --ink: #e3e7ee; --muted: #9aa3b2; --line: #313846;
+      --settled: #5cbf8d; --open: #e0a64a; --accent: #7d9cf0; --accent-ink: #10141c; --wash: #222a3b;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(240px, 300px); background: var(--paper); color: var(--ink); }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); }
+    /* the title bar in this app's colors */
+    skillframe-titlebar { --tb-bg: var(--surface); --tb-ink: var(--ink); --tb-muted: var(--muted); --tb-line: var(--line); --tb-accent: var(--accent); }
+    .work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(240px, 300px); }
     skillframe-chat { border-right: 1px solid var(--line); min-height: 0; background: var(--surface); }
     button, input, textarea { font: inherit; color: inherit; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -85,12 +94,13 @@
     @media (prefers-reduced-motion: reduce) { .tree .new > .node { animation: none; } }
 
     @media (max-width: 1100px) {
-      body { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+      .work { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
       skillframe-chat { grid-row: 1 / 3; }
       aside { border-left: 0; border-top: 1px solid var(--line); max-height: 34vh; padding: 16px 36px; }
     }
     @media (max-width: 720px) {
-      body { height: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: 60vh auto auto; }
+      body { height: auto; }
+      .work { grid-template-columns: minmax(0, 1fr); grid-template-rows: 60vh auto auto; }
       skillframe-chat { grid-row: auto; border-right: 0; border-bottom: 1px solid var(--line); }
       main { padding: 20px 16px 0; overflow: visible; }
       aside { max-height: none; padding: 16px; }
@@ -98,14 +108,18 @@
   </style>
 </head>
 <body>
-  <!-- lang: this page's own words are English, so the sidebar's are too -->
-  <skillframe-chat endpoint="/sf" lang="en"></skillframe-chat>
-  <main><div class="col" id="view"></div></main>
-  <aside aria-label="Design tree">
-    <h2>Design tree</h2>
-    <p class="sub" id="tally">Each question becomes a branch here.</p>
-    <ul class="tree" id="tree"></ul>
-  </aside>
+  <!-- this page's own words are English only: its settings offer the theme, not a language -->
+  <skillframe-titlebar settings="theme"></skillframe-titlebar>
+  <div class="work">
+    <!-- lang: this page's own words are English, so the sidebar's are too -->
+    <skillframe-chat endpoint="/sf" lang="en"></skillframe-chat>
+    <main><div class="col" id="view"></div></main>
+    <aside aria-label="Design tree">
+      <h2>Design tree</h2>
+      <p class="sub" id="tally">Each question becomes a branch here.</p>
+      <ul class="tree" id="tree"></ul>
+    </aside>
+  </div>
   <script type="module">
     import { md } from "/sf/ui/skillframe-chat.js";
 

@@ -129,6 +129,25 @@ await sf.listen({ port: 4320 });
 页面也能读写共享文件：`GET /sf/files?path=todos.json` 返回 `{ text, hash }`；`POST /sf/files` 提交
 `{ path, text, baseHash }`，如果 agent 刚改过，会返回 409 和最新版本，而不是覆盖 agent 的修改。
 
+### 标题栏（可选）
+
+```html
+<script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
+<skillframe-titlebar name="Paper Lab" logo="/logo.svg">
+  <nav slot="center">…你的标签页</nav>
+  <button slot="actions">…你的按钮</button>
+</skillframe-titlebar>
+```
+
+左边是你的 logo 和名字（默认取页面的图标和标题），中间和右边留给你自己的标签页和按钮，还有一个设置按钮，
+用户在里面选语言和外观（不选就跟随系统）。在浏览器标签页里，它就是你 app 的顶栏；在把标题栏交给页面的窗口里，
+它就是窗口的标题栏：拖它移动窗口、贴边分屏，双击最大化，并显示最小化 / 最大化 / 关闭按钮。Electron 里给窗口
+`titleBarStyle: "hidden"` 加 `titleBarOverlay: { height: 40 }`（见 [examples/electron](examples/electron)）。
+`settings="theme"` 只提供外观（页面自己的文字只有一种语言时用），`settings="off"` 不显示设置；在它上面设
+`--tb-bg`、`--tb-ink`、`--tb-muted`、`--tb-line`、`--tb-accent` 换成你的配色。用户的选择在
+`/sf/ui/skillframe-prefs.js` 里（`prefs.get("lang")`、`prefs.set("theme", "dark")`），页面会得到
+`<html data-sf-theme="dark">`，你自己的配色可以据此切换。
+
 ### 已经有自己的服务器，或者是桌面应用
 
 ```js
@@ -178,7 +197,7 @@ Tauri 和普通浏览器窗口也是同样的做法。
 
 | | |
 |---|---|
-| 属性 | `endpoint`（默认 `/sf`）、`lang`（`en`、`zh`；默认跟随浏览器）、`theme`（`light`、`dark`；默认跟随系统） |
+| 属性 | `endpoint`（默认 `/sf`）、`lang`（`en`、`zh`；默认跟随浏览器）、`theme`（`light`、`dark`；默认跟随系统）。用户在标题栏设置里的选择优先于这两个属性。 |
 | `setScreen(obj)` | 用户此刻在看什么；你的 `context()` 会收到它 |
 | `ask({ prompt, shown })` | 从你自己的按钮发起一次回复；结束时 resolve `{ ok, error }`。`shown` 是对话里显示的文字。 |
 | `newChat()` | 新开一个对话 |
@@ -207,6 +226,8 @@ npm create skillframe my-app -- --eject  # 新建一个 app，skillframe 直接�
 | 拷出来的文件 | 管什么 |
 |---|---|
 | `ui/skillframe-chat.js` | 整个侧边栏：一个 Web Component，样式在它自己的 shadow root 里 |
+| `ui/skillframe-titlebar.js` | 标题栏：你的 logo 和名字、设置、窗口按钮 |
+| `ui/skillframe-prefs.js` | 用户选的语言和外观，两个组件共用 |
 | `core/index.js` | `createSkillframe()` 和它的选项 |
 | `core/http.js` | 侧边栏调用的路由，以及只允许本机访问的检查 |
 | `core/chat/runner.js`、`core/chat/store.js` | 跑回复；保存对话 |
@@ -222,6 +243,8 @@ npm create skillframe my-app -- --eject  # 新建一个 app，skillframe 直接�
 - 流式显示回复、思考过程和工具步骤；显示 agent 的任务列表。
 - agent 请求权限、提问、提出计划时弹出卡片：允许、始终允许、带理由拒绝；选择答案；批准计划或让它继续完善。
 - 可以选 agent、权限模式和模型；有停止按钮；agent 干活时发的消息会排队。
+- 和 Claude Code 桌面版一样的「+」菜单：添加文件或图片（Ctrl+U）、引用工作文件夹里的文件（`@`）、斜杠命令（`/`），
+  以及 agent 连着的 MCP 服务器和它们的状态。
 - 附件：粘贴、拖入或选择文件。图片直接给 agent 看，其他文件把路径给 agent。
 - 可以从任意一条回复分叉出新对话（Claude Code 和 Codex）。
 - 亮色和暗色，中文和英文，最窄 320 px。样式在 shadow root 里，不会和你的样式冲突；颜色都是 CSS 变量，可以自己改。

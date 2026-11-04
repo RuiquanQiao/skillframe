@@ -190,6 +190,18 @@ describe("examples/studio", async () => {
     });
   }
 
+  test("before any project is open, the start screen still gets the title bar's scripts and the icon", async () => {
+    const fresh = await start(path.join(EXAMPLES, "studio"), tmpDir("studio-fresh"), {});
+    try {
+      for (const f of ["skillframe-titlebar.js", "skillframe-prefs.js"]) assert.equal((await request(`${fresh.url}/sf/ui/${f}`, "GET")).status, 200, f);
+      assert.equal((await request(`${fresh.url}/icon.svg`, "GET")).status, 200);
+      assert.equal((await request(`${fresh.url}/sf/ui/..%2Fpackage.json`, "GET")).status, 404);
+      assert.equal((await request(`${fresh.url}/sf/chats`, "GET")).status, 404, "the rest of /sf waits for a project");
+    } finally {
+      fresh.server.kill();
+    }
+  });
+
   test("the project's folder is served on a port of its own, with the studio's script in every page", async () => {
     const { project } = await state();
     assert.equal(project.folder, site);

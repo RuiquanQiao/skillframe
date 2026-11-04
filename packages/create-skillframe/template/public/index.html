@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}}</title>
   <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <!-- the title bar: your app's name (and logo="…"), the settings (language, theme) -->
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; background: Canvas; color: CanvasText; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
+    .work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; }
     skillframe-chat { border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent); min-height: 0; }
     main { padding: 24px 32px; overflow: auto; }
     h1 { font-size: 20px; margin: 0 0 16px; }
@@ -17,16 +20,19 @@
     li.done span { text-decoration: line-through; opacity: .6; }
     li input { width: 18px; height: 18px; margin: 0; flex: none; align-self: center; cursor: pointer; }
     #status { color: GrayText; font-size: 13px; min-height: 1.4em; }
-    @media (max-width: 700px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } }
+    @media (max-width: 700px) { .work { grid-template-columns: 1fr; grid-template-rows: 55% 1fr; } }
   </style>
 </head>
 <body>
-  <skillframe-chat endpoint="/sf"></skillframe-chat>
-  <main>
-    <h1>{{title}}</h1>
-    <ul id="todos"></ul>
-    <p id="status" role="status"></p>
-  </main>
+  <skillframe-titlebar></skillframe-titlebar>
+  <div class="work">
+    <skillframe-chat endpoint="/sf"></skillframe-chat>
+    <main>
+      <h1>{{title}}</h1>
+      <ul id="todos"></ul>
+      <p id="status" role="status"></p>
+    </main>
+  </div>
   <script type="module">
     const chat = document.querySelector("skillframe-chat");
     const list = document.getElementById("todos");

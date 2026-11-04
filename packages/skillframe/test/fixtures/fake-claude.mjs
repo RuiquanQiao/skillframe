@@ -22,7 +22,8 @@ let n = 0;
 const waiting = new Map(); // request_id -> resolve(response)
 let interrupted = null;
 
-out({ type: "system", subtype: "init", session_id: session, model: "fake-model", permissionMode: opt("--permission-mode") ?? "default", tools: [] });
+out({ type: "system", subtype: "init", session_id: session, model: "fake-model", permissionMode: opt("--permission-mode") ?? "default", tools: [],
+  mcp_servers: [{ name: "skillframe", status: "connected" }, { name: "github", status: "needs-auth" }, { name: "a-server-with-a-really-long-name-that-should-not-widen-the-menu", status: "failed" }] });
 
 function say(text) {
   for (const piece of text.match(/.{1,4}/gs) ?? [""]) {

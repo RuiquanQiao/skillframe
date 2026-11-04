@@ -16,6 +16,8 @@ import { createSkillframe } from "skillframe";
 import { AppRun, detect } from "./stacks.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// skillframe's own page files (ui/), next to its dist/src/index.js
+const UI = path.resolve(path.dirname(fileURLToPath(import.meta.resolve("skillframe"))), "..", "..", "ui");
 // APP_HOME puts the data somewhere else (the tests use it)
 const home = process.env.APP_HOME ?? here;
 const dataDir = path.join(home, ".data");
@@ -245,7 +247,17 @@ const server = http.createServer(async (req, res) => {
   if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(req.headers.host ?? "")) return json(res, 403, { error: "Forbidden host" });
   if (url.pathname.startsWith("/sf/") || url.pathname === "/sf") {
     if (sf && (await sf.handler(req, res))) return;
+    // before a project is open: still the title bar's scripts (the start screen has the title bar)
+    const ui = /^\/sf\/ui\/([\w-]+\.js)$/.exec(url.pathname);
+    if (req.method === "GET" && ui && existsSync(path.join(UI, ui[1]))) {
+      res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+      return createReadStream(path.join(UI, ui[1])).pipe(res);
+    }
     return json(res, 404, { error: "No project is open" });
+  }
+  if (req.method === "GET" && url.pathname === "/icon.svg") {
+    res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache" });
+    return createReadStream(path.join(here, "public", "icon.svg")).pipe(res);
   }
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });

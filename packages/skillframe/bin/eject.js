@@ -36,6 +36,8 @@ touches it. To see what changed upstream since, read the
 | File | What it does | Change it to |
 |---|---|---|
 | \`ui/skillframe-chat.js\` | The whole sidebar: one Web Component, styles in its shadow root | change how the sidebar looks or behaves |
+| \`ui/skillframe-titlebar.js\` | The title bar: the app's logo and name, the settings, the window's buttons | change the header or what the settings offer |
+| \`ui/skillframe-prefs.js\` | The user's language and theme, shared by the sidebar and the title bar | add a language or a setting |
 | \`core/index.js\` | \`createSkillframe()\`: options, \`listen()\`, \`handler()\`, \`send()\` | change the server API |
 | \`core/http.js\` | The routes the sidebar calls under \`/sf\`, and the local-only checks | add a route; change who may call it |
 | \`core/chat/runner.js\` | One agent process per reply, its output turned into blocks, the queue | change how replies run |

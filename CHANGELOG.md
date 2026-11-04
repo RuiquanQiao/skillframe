@@ -5,6 +5,21 @@ All notable changes to the `skillframe` and `create-skillframe` packages. Versio
 
 ## Unreleased
 
+- `<skillframe-titlebar>` (`/sf/ui/skillframe-titlebar.js`): the app's title bar. Its logo and name
+  (by default the page's icon and title), slots for its own tabs, buttons and settings, and a
+  settings panel where the user picks the language and the theme (`settings="theme"` / `"off"`).
+  In a window that gives the page its title bar it moves, snaps and maximizes the window and shows
+  the window's buttons; Electron: `titleBarStyle: "hidden"` with `titleBarOverlay`. Every example
+  and the `create-skillframe` template have it.
+- `/sf/ui/skillframe-prefs.js`: the user's language and theme, shared by the sidebar and the title
+  bar (and the app's other windows). The user's pick wins over the element's `lang` / `theme`; the
+  page gets `<html data-sf-theme>`.
+- The sidebar: a "+" menu as in the Claude Code app (add files or photos, also Ctrl+U; mention a
+  file; a slash command in front of what was typed; the agent's MCP servers with their state). In the
+  chat list the open chat is a selected row instead of a checked one, and only a chat that is
+  working, waiting or unread has a dot (none for an idle one, in the list or the header).
+- Repository only: `demos/skillframe-window.exe` gives its title bar to a page that has
+  `<skillframe-titlebar>` (and keeps Windows' own for a page without).
 - `npx skillframe serve [skillframe.json]`: skillframe for an app in any language. The app's tools
   and context are routes of its own server, described in `skillframe.json`; requests that aren't
   skillframe's go to the app (`--app`), `--parent` ends skillframe with the app. New example:

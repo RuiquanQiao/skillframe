@@ -328,7 +328,7 @@ describe("the sidebar in a browser", async () => {
   test("no native <select> anywhere: every picker is the sidebar's own menu", { skip: !browser }, async () => {
     const { page } = await open();
     await page.locator("skillframe-chat .model-btn").waitFor();
-    for (const btn of [".bar .chat-btn", ".mode-btn", ".model-btn", ".ring"]) {
+    for (const btn of [".bar .chat-btn", ".plus-btn", ".mode-btn", ".model-btn", ".ring"]) {
       await page.locator(`skillframe-chat ${btn}`).click();
       await page.locator("skillframe-chat .pop").waitFor();
       assert.equal(await page.locator("skillframe-chat select").count(), 0, btn);
@@ -414,7 +414,7 @@ describe("the sidebar in a browser", async () => {
     await page.locator("skillframe-chat .model-btn").waitFor();
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
-      for (const btn of [".bar .chat-btn", ".mode-btn", ".model-btn", ".ring"]) {
+      for (const btn of [".bar .chat-btn", ".plus-btn", ".mode-btn", ".model-btn", ".ring"]) {
         await page.locator(`skillframe-chat ${btn}`).click();
         const box = await page.locator("skillframe-chat .pop").boundingBox();
         assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 320 && box.y + box.height <= 640, `${btn} ${colorScheme}: ${JSON.stringify(box)}`);
@@ -473,5 +473,235 @@ describe("the sidebar in a browser", async () => {
     await page.waitForFunction((gone) => (document.querySelector("skillframe-chat") as any).state.chatId !== gone, id);
     assert.equal((await request(`${url}/sf/chats/${id}`, "GET")).status, 404);
     await page.close();
+  });
+
+  /** SF_SHOTS=<folder>: the tests below also save what they look at, for a person to review */
+  const shot = async (page: Page, name: string) => {
+    if (process.env.SF_SHOTS) await page.screenshot({ path: path.join(process.env.SF_SHOTS, `${name}.png`) });
+  };
+
+  test("the chat list: the open chat is a selected row (no check), and only a chat with a state has a dot", { skip: !browser }, async () => {
+    const { page, id } = await open();
+    await say(page, "hello");
+    await page.locator("skillframe-chat .md", { hasText: /^Hi there$/ }).waitFor();
+    await idle(page);
+    await page.waitForFunction(() => !(document.querySelector("skillframe-chat") as any).isBusy());
+    // idle: the header has no dot in front of the title
+    assert.equal(await page.locator("skillframe-chat .bar .dot").count(), 0);
+    await page.locator("skillframe-chat .bar .chat-btn").click();
+    const pop = page.locator("skillframe-chat .pop");
+    const current = pop.locator(".mi.current");
+    assert.equal(await current.count(), 1);
+    assert.equal(await current.getAttribute("aria-checked"), "true");
+    assert.equal(await current.locator("svg").count(), 0, "no check mark on the open chat");
+    assert.equal(await pop.locator(".mi .dot:not(.busy):not(.waiting):not(.unread)").count(), 0, "no dot for an idle chat");
+    await shot(page, "chat-list");
+    await page.keyboard.press("Escape");
+    // working: the header's dot, with room between it and the title
+    await say(page, "slow");
+    await page.locator("skillframe-chat .bar .dot.busy").waitFor();
+    const gap = await page.evaluate(() => {
+      const r = document.querySelector("skillframe-chat")!.shadowRoot!;
+      return r.querySelector(".bar .lbl")!.getBoundingClientRect().left - r.querySelector(".bar .dot")!.getBoundingClientRect().right;
+    });
+    assert.ok(gap >= 7, `the dot sits ${gap}px from the title`);
+    await request(`${url}/sf/chats/${id}/cancel`, "POST", {});
+    await page.close();
+  });
+
+  test("the + menu: add files (also Ctrl+U), mention a file, a command, the agent's MCP servers", { skip: !browser }, async () => {
+    mkdirSync(path.join(sf.workspace, "docs"), { recursive: true });
+    writeFileSync(path.join(sf.workspace, "docs/plus.md"), "x");
+    const { page } = await open();
+    const plus = page.locator("skillframe-chat .plus-btn");
+    const pop = page.locator("skillframe-chat .pop");
+    const box = page.locator("skillframe-chat textarea");
+    await plus.click();
+    assert.deepEqual(await pop.locator(".mi .label").allTextContents(), ["Add files or photos", "Mention a file", "Slash commands", "MCP servers"]);
+    // add files opens the file picker; so does Ctrl+U in the box
+    let chooser = page.waitForEvent("filechooser");
+    await pop.locator(".mi", { hasText: "Add files or photos" }).click();
+    await chooser;
+    chooser = page.waitForEvent("filechooser");
+    await box.press("Control+u");
+    await chooser;
+    // mention a file: "@" at the caret, and the file list opens
+    await box.fill("look at");
+    await plus.click();
+    await pop.locator(".mi", { hasText: "Mention a file" }).click();
+    assert.equal(await box.inputValue(), "look at @");
+    await page.locator("skillframe-chat .pop.slash .mi", { hasText: "docs/plus.md" }).first().waitFor();
+    await page.keyboard.press("Escape");
+    // a command in front of what was typed; what was typed stays
+    await box.fill("fix the tests");
+    await plus.click();
+    await pop.locator(".mi", { hasText: "Slash commands" }).click();
+    await page.locator("skillframe-chat .pop.slash").waitFor();
+    await page.keyboard.type("comp");
+    await page.locator("skillframe-chat .pop.slash .mi.active", { hasText: "/compact" }).waitFor();
+    await page.keyboard.press("Enter");
+    assert.equal(await box.inputValue(), "/compact fix the tests");
+    // MCP servers: the agent lists them as a reply starts
+    await box.fill("");
+    await plus.click();
+    await pop.locator(".mi.more").click();
+    await pop.getByText("Listed once Claude Code starts a reply.").waitFor();
+    await page.keyboard.press("Escape");
+    await say(page, "hello");
+    await page.waitForFunction(() => !!(document.querySelector("skillframe-chat") as any).mcp?.get("claude"));
+    await page.waitForFunction(() => !(document.querySelector("skillframe-chat") as any).isBusy());
+    await plus.click();
+    await pop.locator(".mi.more").click();
+    assert.deepEqual(await pop.locator(".srv .st").allTextContents(), ["Connected", "Needs sign-in", "Failed"]);
+    await shot(page, "plus-menu");
+    for (const width of [320, 800]) {
+      await page.setViewportSize({ width, height: 640 });
+      await plus.click();
+      if (!(await pop.isVisible())) await plus.click();
+      await pop.locator(".mi.more").click();
+      const b = await pop.boundingBox();
+      assert.ok(b && b.x >= 0 && b.x + b.width <= width, `${width}px: ${JSON.stringify(b)}`);
+      const wide = await page.evaluate(() => [...document.querySelector("skillframe-chat")!.shadowRoot!.querySelectorAll(".srv .name")].some((n) => n.scrollWidth > n.clientWidth + 40 && n.getBoundingClientRect().right > innerWidth));
+      assert.equal(wide, false, "a long server name stays inside the menu");
+      await page.keyboard.press("Escape");
+    }
+    await page.close();
+  });
+
+  describe("the title bar", () => {
+    async function openBar(size = { width: 900, height: 600 }, init?: () => void) {
+      // "System" in the settings is the browser's language: English here, whatever this machine's is
+      const page = await browser!.newPage({ viewport: size, locale: "en-US" });
+      page.setDefaultTimeout(10_000);
+      if (init) await page.addInitScript(init);
+      await page.goto(url + "/titlebar.html");
+      await page.waitForFunction(() => !!(document.querySelector("skillframe-chat") as any)?.state?.app);
+      await page.locator("skillframe-titlebar .name").waitFor();
+      return page;
+    }
+
+    test("shows the app's name and a logo tile from the page, the settings, and no window buttons in a browser", { skip: !browser }, async () => {
+      const page = await openBar();
+      assert.equal(await page.locator("skillframe-titlebar .name").textContent(), "Titlebar Test App");
+      assert.equal(await page.locator("skillframe-titlebar .mono").textContent(), "T", "no icon on the page: its initial");
+      await page.evaluate(() => document.querySelector("skillframe-titlebar")!.setAttribute("logo", "/icon.svg"));
+      await page.locator("skillframe-titlebar img.logo").waitFor();
+      assert.equal(await page.locator("skillframe-titlebar .caption").isVisible(), false);
+      assert.equal(await page.locator("skillframe-titlebar .gear").isVisible(), true);
+      await page.close();
+    });
+
+    test("the settings switch the language of the bar and the sidebar, and it lasts across a reload", { skip: !browser }, async () => {
+      const page = await openBar();
+      await page.locator("skillframe-chat textarea[placeholder='Message Claude Code…']").waitFor(); // lang="en" on the page
+      await page.locator("skillframe-titlebar .gear").click();
+      const pop = page.locator("skillframe-titlebar .pop");
+      assert.deepEqual(await pop.locator(".mi .label").allTextContents(), [`System (${"English"})`, "English", "中文"]);
+      await shot(page, "settings");
+      await pop.locator(".mi", { hasText: "中文" }).click();
+      await page.locator("skillframe-chat textarea[placeholder='给 Claude Code 发消息…']").waitFor();
+      await pop.getByText("语言").waitFor();
+      assert.equal(await page.locator("skillframe-titlebar .gear").getAttribute("aria-label"), "设置");
+      await page.reload();
+      await page.locator("skillframe-chat textarea[placeholder='给 Claude Code 发消息…']").waitFor();
+      // back to the system's (the test browser's English)
+      await page.locator("skillframe-titlebar .gear").click();
+      await pop.locator(".mi").first().click();
+      await page.locator("skillframe-chat textarea[placeholder='Message Claude Code…']").waitFor();
+      await page.close();
+    });
+
+    test('settings="theme" offers only the theme; settings="off" no settings button', { skip: !browser }, async () => {
+      const page = await openBar();
+      await page.evaluate(() => document.querySelector("skillframe-titlebar")!.setAttribute("settings", "theme"));
+      await page.locator("skillframe-titlebar .gear").click();
+      const pop = page.locator("skillframe-titlebar .pop");
+      assert.deepEqual(await pop.locator(".head").allTextContents(), ["Theme"]);
+      assert.equal(await pop.locator(".mi").count(), 0, "no language rows");
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => document.querySelector("skillframe-titlebar")!.setAttribute("settings", "off"));
+      assert.equal(await page.locator("skillframe-titlebar .gear").count(), 0);
+      await page.close();
+    });
+
+    test("the title bar alone does not start the sidebar (a page can load it before it has one)", { skip: !browser }, async () => {
+      const page = await browser!.newPage();
+      await page.goto(url + "/titlebar.html");
+      const defined = await page.evaluate(async () => {
+        await import("/sf/ui/skillframe-titlebar.js" as string);
+        return { bar: !!customElements.get("skillframe-titlebar"), viaBar: /from\s+["'][^"']*skillframe-chat\.js/.test(await (await fetch("/sf/ui/skillframe-titlebar.js")).text()) };
+      });
+      assert.deepEqual(defined, { bar: true, viaBar: false });
+      await page.close();
+    });
+
+    test("the theme setting turns the bar, the sidebar and the page dark, and back", { skip: !browser }, async () => {
+      const page = await openBar();
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.locator("skillframe-titlebar .gear").click();
+      await page.locator("skillframe-titlebar .seg button", { hasText: "Dark" }).click();
+      const look = () => page.evaluate(() => ({
+        page: getComputedStyle(document.body).backgroundColor,
+        chat: document.querySelector("skillframe-chat")!.getAttribute("theme"),
+        bar: getComputedStyle(document.querySelector("skillframe-titlebar")!.shadowRoot!.querySelector(".bar")!).backgroundColor,
+      }));
+      const dark = await look();
+      assert.equal(dark.chat, "dark");
+      assert.equal(dark.bar, "rgb(28, 31, 35)");
+      assert.notEqual(dark.page, "rgb(255, 255, 255)");
+      await shot(page, "dark");
+      await page.locator("skillframe-titlebar .seg button").first().click();
+      const back = await look();
+      assert.equal(back.chat, null);
+      assert.equal(back.bar, "rgb(246, 247, 249)");
+      await page.close();
+    });
+
+    test("in skillframe's window: minimize, maximize and close go to the window, and restore shows when maximized", { skip: !browser }, async () => {
+      const page = await openBar({ width: 900, height: 600 }, () => {
+        // a stand-in for the native window's WebView2 bridge
+        const listeners: ((e: { data: unknown }) => void)[] = [];
+        (window as any).sent = [];
+        (window as any).chrome = { webview: {
+          postMessage: (m: string) => {
+            (window as any).sent.push(m);
+            const reply = (data: unknown) => setTimeout(() => listeners.forEach((fn) => fn({ data })));
+            if (m === "sf:titlebar") reply({ sf: "window", custom: true, maximized: false, active: true });
+            if (m === "sf:maximize") reply({ sf: "window", custom: true, maximized: true, active: true });
+          },
+          addEventListener: (_: string, fn: (e: { data: unknown }) => void) => listeners.push(fn),
+          removeEventListener: () => {},
+        } };
+      });
+      await page.locator("skillframe-titlebar .caption .cb.close").waitFor();
+      assert.equal(await page.locator("skillframe-titlebar .edge.t").isVisible(), true, "the top edge resizes");
+      await shot(page, "window");
+      await page.locator("skillframe-titlebar .cb.max").click();
+      await page.locator("skillframe-titlebar .cb.max[aria-label='Restore']").waitFor();
+      assert.equal(await page.locator("skillframe-titlebar .edge.t").isVisible(), false, "maximized: no edge to resize from");
+      await page.locator("skillframe-titlebar .cb.min").click();
+      await page.locator("skillframe-titlebar .cb.close").click();
+      assert.deepEqual(await page.evaluate(() => (window as any).sent), ["sf:titlebar", "sf:maximize", "sf:minimize", "sf:close"]);
+      await page.close();
+    });
+
+    test("a long name and a narrow window: nothing spills out of the bar, the buttons stay", { skip: !browser }, async () => {
+      const page = await openBar({ width: 360, height: 600 });
+      await page.evaluate(() => document.querySelector("skillframe-titlebar")!.setAttribute("name", "An app with a really very long product name that never seems to end"));
+      for (const colorScheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme });
+        const r = await page.evaluate(() => {
+          const tb = document.querySelector("skillframe-titlebar")!;
+          const bar = tb.shadowRoot!.querySelector(".bar")!.getBoundingClientRect();
+          const gear = tb.shadowRoot!.querySelector(".gear")!.getBoundingClientRect();
+          return { gearIn: gear.right <= bar.right && gear.left >= bar.left, page: document.documentElement.scrollWidth > innerWidth, height: bar.height };
+        });
+        assert.deepEqual(r, { gearIn: true, page: false, height: 40 }, colorScheme);
+      }
+      await page.locator("skillframe-titlebar .gear").click();
+      const b = await page.locator("skillframe-titlebar .pop").boundingBox();
+      assert.ok(b && b.x >= 0 && b.x + b.width <= 360, JSON.stringify(b));
+      await page.close();
+    });
   });
 });

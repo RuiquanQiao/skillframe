@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Titlebar Test App</title>
+  <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: Canvas; color: CanvasText; overflow: hidden; }
+    skillframe-chat { flex: 1; min-height: 0; }
+  </style>
+</head>
+<body>
+  <skillframe-titlebar></skillframe-titlebar>
+  <skillframe-chat endpoint="/sf"></skillframe-chat>
+</body>
+</html>

@@ -15,7 +15,11 @@
 //   attention="off": don't mark the page's title while the user is in another window
 //
 // Keys: Enter sends, Shift+Enter breaks the line, Esc stops a reply, Shift+Tab switches the
-// permission mode, Ctrl+Shift+M / I / E open the mode / model / effort menus, / lists commands.
+// permission mode, Ctrl+Shift+M / I / E open the mode / model / effort menus, / lists commands,
+// @ lists files, Ctrl+U adds files ("+" has all of these).
+//
+// Language and theme: the user's pick (skillframe-prefs.js, set in <skillframe-titlebar>'s
+// settings) wins over lang="…" and theme="…".
 
 const STRINGS = {
   en: {
@@ -61,6 +65,19 @@ const STRINGS = {
     signedOut: "{agent} doesn't look signed in on this computer. {login}",
     keepsAgent: "This chat stays with {agent}. Starting a new chat with {other}.",
     attachFiles: "Attach files",
+    add: "Add",
+    addFiles: "Add files or photos",
+    mentionFile: "Mention a file",
+    mentionFileDesc: "From the working folder",
+    slashCommands: "Slash commands",
+    mcpServers: "MCP servers",
+    mcpNone: "Listed once {agent} starts a reply.",
+    mcpEmpty: "{agent} has no MCP servers set up.",
+    "mcp.connected": "Connected",
+    "mcp.failed": "Failed",
+    "mcp.needs-auth": "Needs sign-in",
+    "mcp.pending": "Connecting",
+    "mcp.disabled": "Off",
     remove: "Remove {name}",
     mode: "Permission mode",
     modeHint: "Shift+Tab switches",
@@ -194,6 +211,19 @@ const STRINGS = {
     signedOut: "这台电脑上的 {agent} 看起来还没登录。{login}",
     keepsAgent: "这个对话会一直用 {agent}，已用 {other} 新开一个对话。",
     attachFiles: "添加附件",
+    add: "添加",
+    addFiles: "添加文件或图片",
+    mentionFile: "引用文件",
+    mentionFileDesc: "工作文件夹里的文件",
+    slashCommands: "斜杠命令",
+    mcpServers: "MCP 服务器",
+    mcpNone: "{agent} 开始回复后，这里列出它连着的 MCP 服务器。",
+    mcpEmpty: "{agent} 没有设置任何 MCP 服务器。",
+    "mcp.connected": "已连接",
+    "mcp.failed": "连接失败",
+    "mcp.needs-auth": "需要登录",
+    "mcp.pending": "连接中",
+    "mcp.disabled": "已关闭",
     remove: "移除 {name}",
     mode: "权限模式",
     modeHint: "Shift+Tab 切换",
@@ -305,6 +335,15 @@ const STRINGS = {
   },
 };
 
+// ---- the user's own settings (language, theme): skillframe-prefs.js -------------------------
+import { langFor, PREF_EVENT, prefs } from "./skillframe-prefs.js";
+export { prefs };
+const pref = (key) => prefs.get(key);
+
+/** a string in `lang`, English when that language lacks it */
+const tr = (lang, key, vars = {}) =>
+  ((STRINGS[lang] || STRINGS.en)[key] ?? STRINGS.en[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+
 // the modes whose button wears the warning color
 const RISKY = new Set(["bypassPermissions"]);
 const MODE_ICON = { default: "hand", acceptEdits: "pen", plan: "map", auto: "spark", bypassPermissions: "alert" };
@@ -328,6 +367,9 @@ const ICON_PATHS = {
   spark: "M8 2.5 9.3 6.7 13.5 8 9.3 9.3 8 13.5 6.7 9.3 2.5 8 6.7 6.7z",
   alert: "M8 3 13.5 12.5h-11zM8 7v2.5M8 11v.2",
   refresh: "M12.5 6.5A4.5 4.5 0 1 0 12 10M12.5 3.5v3h-3",
+  at: "M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM10.5 8v1a1.75 1.75 0 0 0 3.5 0V8a6 6 0 1 0-2.4 4.8",
+  slash: "M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM9.5 5 6.5 11",
+  plug: "M6 2.5V5M10 2.5V5M4.5 5h7v2.5a3.5 3.5 0 0 1-7 0zM8 11v2.5",
 };
 const icon = (name) => {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -389,7 +431,9 @@ button:disabled { cursor: default; }
 .chat-btn .lbl { flex: 0 1 auto; }
 .chat-btn .ic { color: var(--sf-muted); }
 .title-input { flex: 1; min-width: 0; height: 28px; border: 1px solid var(--sf-accent); border-radius: 6px; padding: 0 8px; background: transparent; font-weight: 600; outline: 0; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sf-line); flex: none; }
+/* a chat's state: only drawn when there is one (working, waiting for the user, a reply not read yet) */
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.chat-btn .dot { margin-right: 4px; }
 .dot.busy { background: var(--sf-accent); animation: sf-pulse 1.4s ease-in-out infinite; }
 .dot.waiting { background: var(--sf-attention); box-shadow: 0 0 0 3px var(--sf-attention-soft); }
 .dot.unread { background: var(--sf-accent); }
@@ -530,6 +574,22 @@ details.group > .steps { margin-top: 6px; }
 .mi .side { flex: none; color: var(--sf-muted); font-size: 12px; display: flex; align-items: center; gap: 6px; min-height: 19px; }
 .mi .side .ic { color: var(--sf-accent); }
 .mi.danger, .mi.danger > .ic { color: var(--sf-danger); }
+/* the open chat in the chat list: a selected row, like a sidebar's, not a radio check */
+.mi.current { background: var(--sf-soft); }
+.mi.current .label { font-weight: 600; }
+.mi .key { font-size: 12px; color: var(--sf-muted); font-variant-numeric: tabular-nums; }
+.mi.more > .ic:last-child { margin-top: 2px; color: var(--sf-muted); transition: transform .15s; }
+.mi.more[aria-expanded="true"] > .ic:last-child { transform: rotate(90deg); }
+.srv { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 32px; min-width: 0; }
+.srv .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srv .st { flex: none; font-size: 12px; color: var(--sf-muted); display: inline-flex; align-items: center; gap: 6px; }
+.srv .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--sf-muted); }
+.srv .st.connected::before { background: #2E9E5B; }
+.srv .st.failed { color: var(--sf-danger); }
+.srv .st.failed::before { background: var(--sf-danger); }
+.srv .st.needs-auth { color: var(--sf-attention); }
+.srv .st.needs-auth::before { background: var(--sf-attention); }
+.mcp-note { padding: 2px 8px 6px 32px; color: var(--sf-muted); font-size: 12px; }
 .mi .tag { font-size: 11px; color: var(--sf-attention); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
 .mi .kbd { font-variant-numeric: tabular-nums; }
 .seg { display: flex; gap: 2px; padding: 2px 4px 6px; flex-wrap: wrap; }
@@ -710,13 +770,41 @@ class SkillframeChat extends HTMLElement {
     return (this.getAttribute("endpoint") || "/sf").replace(/\/$/, "");
   }
 
+  /** the language the user picked in the settings, else the app's (lang="…"), else the system's */
   get lang() {
-    return (this.getAttribute("lang") || navigator.language || "en").slice(0, 2);
+    return langFor(this.getAttribute("lang"));
   }
 
   t(key, vars = {}) {
-    const s = (STRINGS[this.lang] || STRINGS.en)[key] ?? STRINGS.en[key] ?? key;
-    return s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+    return tr(this.lang, key, vars);
+  }
+
+  /** the theme the user picked in the settings wins over the app's theme="…" */
+  applyTheme() {
+    const picked = pref("theme");
+    this.applyingTheme = true;
+    if (picked) this.setAttribute("theme", picked);
+    else if (this.appTheme) this.setAttribute("theme", this.appTheme);
+    else this.removeAttribute("theme");
+    this.applyingTheme = false;
+  }
+
+  static get observedAttributes() {
+    return ["theme", "lang"];
+  }
+
+  attributeChangedCallback(name, old, value) {
+    if (name === "theme" && !this.applyingTheme) {
+      this.appTheme = value;
+      if (pref("theme") && value !== pref("theme")) this.applyTheme();
+    }
+    if (name === "lang" && old !== value && this.bar) this.relabel();
+  }
+
+  /** every word redrawn in the current language */
+  relabel() {
+    this.closePop();
+    this.render();
   }
 
   /** "one|many" strings by count */
@@ -808,6 +896,12 @@ class SkillframeChat extends HTMLElement {
     this.onResize = () => this.closePop();
     document.addEventListener("pointerdown", this.onDown, true);
     window.addEventListener("resize", this.onResize);
+    this.onPrefs = (e) => {
+      if (e.detail.key === "theme") this.applyTheme();
+      if (e.detail.key === "lang") this.relabel();
+    };
+    window.addEventListener(PREF_EVENT, this.onPrefs);
+    this.applyTheme();
     this.tick = setInterval(() => this.paintWorking(), 1000);
     this.listen();
     this.render(); // the frame at once (header, composer); the data fills in below
@@ -826,6 +920,7 @@ class SkillframeChat extends HTMLElement {
     clearInterval(this.tick);
     document.removeEventListener("pointerdown", this.onDown, true);
     window.removeEventListener("resize", this.onResize);
+    window.removeEventListener(PREF_EVENT, this.onPrefs);
     this.closePop();
   }
 
@@ -916,6 +1011,12 @@ class SkillframeChat extends HTMLElement {
       this.renderLive();
     };
     on("chat.tool", mine((d) => upsert(d.tool)));
+    // the agent's MCP servers, as it starts a reply (Claude Code lists them; the "+" menu shows them)
+    on("chat.init", (d) => {
+      if (!Array.isArray(d.mcp)) return;
+      const agent = this.state.chats.find((c) => c.id === d.chat)?.agent ?? (d.chat === this.state.chatId ? this.agentId : null);
+      if (agent) (this.mcp ??= new Map()).set(agent, d.mcp.map((s) => ({ name: String(s.name ?? ""), status: String(s.status ?? "") })));
+    });
     on("chat.ask", (d) => {
       if (d.chat === this.state.chatId) upsert(d.ask);
       else this.renderBar();
@@ -1187,10 +1288,12 @@ class SkillframeChat extends HTMLElement {
   }
 
   /** one row of a menu */
-  item({ label, desc, side, checked, disabled, danger, num, ic, tag, onPick, keep }) {
+  /** `current`: the row is where the user is (the open chat), shown as a selected row instead of a check */
+  item({ label, desc, side, checked, current, disabled, danger, num, ic, tag, onPick, keep }) {
+    if (current !== undefined) checked = undefined;
     const b = h("button", {
-      type: "button", class: `mi${danger ? " danger" : ""}`, role: checked === undefined ? "menuitem" : "menuitemradio",
-      "aria-checked": checked === undefined ? undefined : String(!!checked), disabled: !!disabled, "data-num": num ? String(num) : undefined,
+      type: "button", class: `mi${danger ? " danger" : ""}${current ? " current" : ""}`, role: checked === undefined && current === undefined ? "menuitem" : "menuitemradio",
+      "aria-checked": current !== undefined ? String(!!current) : checked === undefined ? undefined : String(!!checked), disabled: !!disabled, "data-num": num ? String(num) : undefined,
       onclick: () => {
         if (!keep) this.closePop();
         onPick?.();
@@ -1212,9 +1315,10 @@ class SkillframeChat extends HTMLElement {
       chats.slice(0, 60).forEach((c, i) => {
         const agent = this.agents.find((a) => a.id === c.agent);
         const desc = [this.ago(c.updatedAt), this.agents.length > 1 ? agent?.name : ""].filter(Boolean).join(", ");
+        const state = this.chatState(c.id);
         p.append(this.item({
-          label: c.title || this.t("newChat"), desc, checked: c.id === chatId, num: i < 9 ? i + 1 : undefined,
-          side: h("span", { class: `dot ${this.chatState(c.id)}` }),
+          label: c.title || this.t("newChat"), desc, current: c.id === chatId, num: i < 9 ? i + 1 : undefined,
+          side: state ? h("span", { class: `dot ${state}`, title: state === "waiting" ? this.t("waiting", { agent: agent?.name || this.agentName }) : undefined }) : null,
           onPick: () => this.serial(() => this.open(c.id)),
         }));
       });
@@ -1479,10 +1583,61 @@ class SkillframeChat extends HTMLElement {
     return [...local, ...own];
   }
 
-  /** the box starts with "/": commands. A word starting with "@" at the caret: files in the agent's folder */
+  // ---- the "+" menu ------------------------------------------------------------------
+  openPlusMenu(anchor) {
+    const agent = this.agentName;
+    this.openPop(anchor, (p) => {
+      p.append(this.item({ label: this.t("addFiles"), ic: "clip", side: h("span", { class: "key" }, "Ctrl+U"), onPick: () => this.picker.click() }));
+      p.append(this.item({ label: this.t("mentionFile"), desc: this.t("mentionFileDesc"), ic: "at", side: h("span", { class: "key" }, "@"), onPick: () => this.typeAtCaret("@") }));
+      p.append(this.item({ label: this.t("slashCommands"), ic: "slash", side: h("span", { class: "key" }, "/"), onPick: () => this.startCommand() }));
+      // the agent's MCP servers, as it reported them when this chat's reply started (Claude Code does)
+      const servers = this.mcp?.get(this.agentId);
+      if (!servers && this.agentId !== "claude") return;
+      const body = h("div", { class: "more-body", hidden: true });
+      const more = h("button", { type: "button", class: "mi more", "aria-expanded": "false", onclick: () => {
+        body.hidden = !body.hidden;
+        more.setAttribute("aria-expanded", String(!body.hidden));
+        this.place();
+      } }, icon("plug"), h("span", { class: "main" }, h("span", { class: "label" }, this.t("mcpServers"))),
+      servers?.length ? h("span", { class: "side" }, String(servers.length)) : null, icon("chevronRight"));
+      if (!servers) body.append(h("div", { class: "mcp-note" }, this.t("mcpNone", { agent })));
+      else if (!servers.length) body.append(h("div", { class: "mcp-note" }, this.t("mcpEmpty", { agent })));
+      else for (const s of servers) {
+        const st = String(s.status || "");
+        body.append(h("div", { class: "srv", title: s.name }, h("span", { class: "name" }, s.name), h("span", { class: `st ${st}` }, STRINGS[this.lang]?.[`mcp.${st}`] ?? STRINGS.en[`mcp.${st}`] ?? st)));
+      }
+      p.append(h("div", { class: "sep" }), more, body);
+    }, { label: this.t("add") });
+  }
+
+  /** puts `text` at the caret, with a space before it when it would stick to a word */
+  typeAtCaret(text) {
+    const v = this.input.value;
+    const at = this.input.selectionStart ?? v.length;
+    const before = v.slice(0, at);
+    const add = before && !/\s$/.test(before) ? " " + text : text;
+    this.input.value = before + add + v.slice(at);
+    this.input.focus();
+    this.input.setSelectionRange(at + add.length, at + add.length);
+    this.autosize();
+    this.updateSlash();
+  }
+
+  /** "/" at the start of the box, what was typed kept after it: the command list opens */
+  startCommand() {
+    if (!this.input.value.startsWith("/")) this.input.value = "/" + (this.input.value ? " " + this.input.value : "");
+    this.input.focus();
+    this.input.setSelectionRange(1, 1);
+    this.autosize();
+    this.updateSlash();
+  }
+
+  /** the box starts with "/" and the caret is in that first word: commands. A word starting with "@" at the caret: files in the agent's folder */
   updateSlash() {
     const v = this.input.value;
-    const m = v.match(/^\/(\S*)$/);
+    const caret = this.input.selectionStart ?? v.length;
+    const word = v.match(/^\/(\S*)/);
+    const m = word && caret <= word[0].length ? word : null;
     if (m) {
       const q = m[1].toLowerCase();
       const list = this.commandList().filter((c) => c.name.toLowerCase().includes(q))
@@ -1490,7 +1645,6 @@ class SkillframeChat extends HTMLElement {
         .slice(0, 40);
       return this.suggest(list, this.t("commands"));
     }
-    const caret = this.input.selectionStart ?? v.length;
     const at = v.slice(0, caret).match(/(^|\s)@([^\s@]*)$/);
     if (at && this.state.app) {
       const ask = (this.mentionAsk = (this.mentionAsk ?? 0) + 1);
@@ -1557,14 +1711,18 @@ class SkillframeChat extends HTMLElement {
       this.autosize();
       return;
     }
+    // the command replaces the box's first word; what was typed after it stays
+    const rest = this.input.value.replace(/^\/\S*\s*/, "");
     if (c.local && !c.hint) {
-      this.input.value = "";
+      this.input.value = rest;
       this.autosize();
       this.runLocal(`/${c.name}`);
       return;
     }
-    this.input.value = `/${c.name} `;
+    const head = `/${c.name} `;
+    this.input.value = head + rest;
     this.input.focus();
+    this.input.setSelectionRange(head.length, head.length);
     this.autosize();
   }
 
@@ -1879,7 +2037,7 @@ class SkillframeChat extends HTMLElement {
     this.chatBtn = h("button", { type: "button", class: "ib chat-btn", "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": this.t("chats"),
       title: state === "waiting" ? this.t("waiting", { agent: this.agentName }) : title,
       onclick: (e) => this.openChatMenu(e.currentTarget) },
-    h("span", { class: `dot ${state}` }), h("span", { class: "lbl" }, title), icon("chevron"));
+    state ? h("span", { class: `dot ${state}` }) : null, h("span", { class: "lbl" }, title), icon("chevron"));
     this.chatBtn.addEventListener("dblclick", () => this.state.meta && !this.isFresh() && this.startRename());
     this.bar.replaceChildren(
       this.chatBtn,
@@ -1904,15 +2062,16 @@ class SkillframeChat extends HTMLElement {
       }
     });
     this.button = h("button", { type: "button", class: "send", onclick: () => (this.isBusy() && !this.input.value.trim() ? this.stop() : this.submit()) });
-    const picker = h("input", { type: "file", multiple: true, hidden: true, onchange: (e) => {
+    const picker = (this.picker = h("input", { type: "file", multiple: true, hidden: true, onchange: (e) => {
       this.attach([...e.target.files]);
       e.target.value = "";
-    } });
+    } }));
     this.tasksNode = h("div", { class: "tasks" });
     this.seesNode = h("div", { class: "sees", hidden: true });
     this.chipsNode = h("div", { class: "chips" });
     this.toolsNode = h("div", { class: "tools" });
-    this.attachBtn = h("button", { type: "button", class: "ib attach", "aria-label": this.t("attachFiles"), title: this.t("attachFiles"), onclick: () => picker.click() }, icon("clip"));
+    // "+": add files, mention a file, a command, the agent's MCP servers (as in the Claude Code app)
+    this.plusBtn = h("button", { type: "button", class: "ib plus-btn", "aria-haspopup": "menu", "aria-expanded": "false", onclick: (e) => this.openPlusMenu(e.currentTarget) }, icon("plus"));
     this.boxNode = h("div", { class: "box" }, this.chipsNode, this.input, this.toolsNode, picker);
     const composer = h("div", { class: "composer" }, this.tasksNode, this.seesNode, this.boxNode);
     // drop files anywhere on the sidebar
@@ -1926,6 +2085,12 @@ class SkillframeChat extends HTMLElement {
     });
     // the desktop apps' shortcuts, while focus is anywhere in the sidebar
     this.addEventListener("keydown", (e) => {
+      // Ctrl+U: add files
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "u") {
+        e.preventDefault();
+        this.closePop();
+        return this.picker.click();
+      }
       if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
       const k = e.key.toLowerCase();
       const btn = (c) => this.toolsNode.querySelector(c);
@@ -1990,7 +2155,9 @@ class SkillframeChat extends HTMLElement {
     // however the chat came to be open (loaded, New chat, a pick, a fork), its agent's options get fetched
     if (this.state.app && this.agentId && !this.info.has(this.agentId)) this.loadInfo(this.agentId);
     const keep = this.pop && this.toolsNode.contains(this.pop.anchor) ? this.pop.anchor.className : null;
-    const kids = [this.attachBtn];
+    this.plusBtn.setAttribute("aria-label", this.t("add"));
+    this.plusBtn.title = this.t("add");
+    const kids = [this.plusBtn];
     if (this.state.app && this.modes().length) {
       const mode = meta?.mode;
       kids.push(h("button", { type: "button", class: `ib mode-btn${RISKY.has(mode) ? " risky" : ""}`, "aria-haspopup": "menu", "aria-expanded": "false", "aria-label": this.t("mode"),

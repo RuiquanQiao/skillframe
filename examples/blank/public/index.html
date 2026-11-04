@@ -6,25 +6,31 @@
   <title>skillframe</title>
   <link rel="icon" href="/icon.svg">
   <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <!-- the title bar: your logo and name (here: the page's icon and title), the settings, and the window's buttons -->
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; --line: color-mix(in srgb, CanvasText 15%, transparent); }
-    body { margin: 0; height: 100vh; display: grid; grid-template-columns: var(--side, 380px) 6px 1fr; background: Canvas; color: CanvasText; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: Canvas; color: CanvasText; overflow: hidden; }
+    .work { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--side, 380px) 6px 1fr; }
     skillframe-chat { min-width: 0; min-height: 0; }
     /* the divider: drag it to try the sidebar at any width */
     #divider { cursor: col-resize; border-left: 1px solid var(--line); touch-action: none; }
     #divider:hover, #divider.dragging { background: color-mix(in srgb, Highlight 30%, transparent); }
     main { min-width: 0; }
     @media (max-width: 700px) {
-      body { grid-template-columns: 1fr; grid-template-rows: 60vh 1fr; }
+      .work { grid-template-columns: 1fr; grid-template-rows: 60% 1fr; }
       #divider { display: none; }
       skillframe-chat { border-bottom: 1px solid var(--line); }
     }
   </style>
 </head>
 <body>
-  <skillframe-chat endpoint="/sf"></skillframe-chat>
-  <div id="divider" role="separator" aria-orientation="vertical" aria-label="Sidebar width"></div>
-  <main></main>
+  <skillframe-titlebar></skillframe-titlebar>
+  <div class="work">
+    <skillframe-chat endpoint="/sf"></skillframe-chat>
+    <div id="divider" role="separator" aria-orientation="vertical" aria-label="Sidebar width"></div>
+    <main></main>
+  </div>
   <script>
     const divider = document.getElementById("divider");
     const setWidth = (px) => document.body.style.setProperty("--side", Math.max(200, Math.min(px, innerWidth - 120)) + "px");

@@ -6,10 +6,12 @@
   <title>Python Todo</title>
   <!-- the sidebar: served by skillframe, which this page is opened through -->
   <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; font-size: 14px; --line: color-mix(in srgb, CanvasText 14%, transparent); --muted: color-mix(in srgb, CanvasText 58%, transparent); }
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; display: grid; grid-template-columns: 380px minmax(0, 1fr); background: Canvas; color: CanvasText; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
+    .work { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minmax(0, 1fr); }
     skillframe-chat { min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
     main { padding: 28px 32px; overflow: auto; }
     h1 { font-size: 20px; margin: 0 0 4px; }
@@ -22,17 +24,21 @@
     li:hover, li.sel { background: color-mix(in srgb, CanvasText 6%, transparent); }
     li.done span { text-decoration: line-through; color: var(--muted); }
     li .id { color: var(--muted); font-variant-numeric: tabular-nums; width: 2.5em; }
-    @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; } skillframe-chat { border-right: 0; border-bottom: 1px solid var(--line); } }
+    @media (max-width: 760px) { .work { grid-template-columns: 1fr; grid-template-rows: 55% 1fr; } skillframe-chat { border-right: 0; border-bottom: 1px solid var(--line); } }
   </style>
 </head>
 <body>
-  <skillframe-chat></skillframe-chat>
-  <main>
-    <h1>Todos</h1>
-    <p class="sub">The app is Python. Ask the agent on the left to add, finish or sort out todos.</p>
-    <form id="add"><input id="text" placeholder="A new todo" aria-label="A new todo" autocomplete="off"><button>Add</button></form>
-    <ul id="list"></ul>
-  </main>
+  <!-- the page's own words are English only: its settings offer the theme -->
+  <skillframe-titlebar settings="theme"></skillframe-titlebar>
+  <div class="work">
+    <skillframe-chat lang="en"></skillframe-chat>
+    <main>
+      <h1>Todos</h1>
+      <p class="sub">The app is Python. Ask the agent on the left to add, finish or sort out todos.</p>
+      <form id="add"><input id="text" placeholder="A new todo" aria-label="A new todo" autocomplete="off"><button>Add</button></form>
+      <ul id="list"></ul>
+    </main>
+  </div>
   <script type="module">
     const chat = document.querySelector("skillframe-chat");
     let selected = null;

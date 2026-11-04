@@ -134,6 +134,27 @@ Your page reads and writes the shared files too: `GET /sf/files?path=todos.json`
 `{ text, hash }`; `POST /sf/files` with `{ path, text, baseHash }` answers 409 with the newer
 version instead of overwriting the agent's edit.
 
+### The title bar (optional)
+
+```html
+<script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
+<skillframe-titlebar name="Paper Lab" logo="/logo.svg">
+  <nav slot="center">…your tabs</nav>
+  <button slot="actions">…your buttons</button>
+</skillframe-titlebar>
+```
+
+Your logo and name on the left (by default the page's icon and title), room for your own tabs and
+buttons, and a settings button where the user picks the language and the theme (both follow the
+system until they do). In a browser tab it is your app's header. In a window that gives the page
+its title bar it *is* the title bar: drag it to move or snap the window, double-click to maximize,
+and it shows minimize / maximize / close. In Electron, `titleBarStyle: "hidden"` with
+`titleBarOverlay: { height: 40 }` ([examples/electron](examples/electron)). `settings="theme"`
+offers only the theme (for a page whose own words are in one language), `settings="off"` none;
+set `--tb-bg`, `--tb-ink`, `--tb-muted`, `--tb-line`, `--tb-accent` on it for your colors. The user's
+picks are in `/sf/ui/skillframe-prefs.js` (`prefs.get("lang")`, `prefs.set("theme", "dark")`), and
+the page gets `<html data-sf-theme="dark">` to key its own colors on.
+
 ### Any language (Python, Go, Rust…)
 
 Your app doesn't import skillframe. It describes its abilities in `skillframe.json`, each one a
@@ -215,7 +236,7 @@ In Electron, start skillframe in the main process and load its URL in the window
 
 | | |
 |---|---|
-| attributes | `endpoint` (default `/sf`), `lang` (`en`, `zh`; default the browser's), `theme` (`light`, `dark`; default the system's) |
+| attributes | `endpoint` (default `/sf`), `lang` (`en`, `zh`; default the browser's), `theme` (`light`, `dark`; default the system's). The user's own pick in the title bar's settings wins over both. |
 | `setScreen(obj)` | what the user is looking at; your `context()` receives it |
 | `ask({ prompt, shown })` | start a reply from your own button; resolves `{ ok, error }` when it ends. `shown` is what the transcript displays. |
 | `newChat()` | |
@@ -246,6 +267,8 @@ plain JavaScript npm ships (no build step); the TypeScript it comes from is in
 | File in the copy | What it does |
 |---|---|
 | `ui/skillframe-chat.js` | the whole sidebar: one Web Component, styles in its shadow root |
+| `ui/skillframe-titlebar.js` | the title bar: your logo and name, the settings, the window's buttons |
+| `ui/skillframe-prefs.js` | the user's language and theme, shared by both |
 | `core/index.js` | `createSkillframe()` and its options |
 | `core/http.js` | the routes the sidebar calls, and the local-only checks |
 | `core/chat/runner.js`, `core/chat/store.js` | running replies; saving chats |
@@ -268,6 +291,8 @@ by looking upward from its own folder.
 - Shortcuts as in the desktop apps: Esc stops, Shift+Tab switches the mode, Ctrl+Shift+M / I / E
   open the mode / model / effort menus. Messages typed while the agent works wait in a queue.
 - Chats: switch, rename, delete; copy a reply; see how long it took.
+- A "+" menu, as in the Claude Code app: add files or photos (Ctrl+U), mention a file of the working
+  folder (`@`), a slash command (`/`), and the agent's MCP servers with their state.
 - Attachments: paste, drop or pick files. Images go to the agent as images, other files by path.
 - Fork a chat from any reply (Claude Code and Codex).
 - Light and dark, English and Chinese, from 320 px wide up. Its styles live in a shadow root, so

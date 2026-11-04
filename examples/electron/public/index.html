@@ -5,18 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Electron Example</title>
   <script type="module" src="/sf/ui/skillframe-chat.js"></script>
+  <!-- the title bar: main.js hides Electron's own (titleBarStyle "hidden"); Electron still draws the window's buttons -->
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; height: 100vh; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; background: Canvas; color: CanvasText; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
+    .work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(280px, 380px) 1fr; }
     skillframe-chat { border-right: 1px solid color-mix(in srgb, CanvasText 15%, transparent); min-height: 0; }
     main { padding: 24px 32px; }
   </style>
 </head>
 <body>
-  <skillframe-chat endpoint="/sf"></skillframe-chat>
-  <main>
-    <h1>Your app goes here</h1>
-    <p>The sidebar on the left is the coding agent installed on this computer, signed in with your own account.</p>
-  </main>
+  <skillframe-titlebar settings="theme"></skillframe-titlebar>
+  <div class="work">
+    <skillframe-chat endpoint="/sf" lang="en"></skillframe-chat>
+    <main>
+      <h1>Your app goes here</h1>
+      <p>The sidebar on the left is the coding agent installed on this computer, signed in with your own account.</p>
+    </main>
+  </div>
 </body>
 </html>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 -7 66 66">
+  <!-- the banner's mark (docs/media/banner.html) on a white window, so it reads on light and dark
+       backgrounds alike. scripts/render-icon.mjs turns it into scripts/launcher/skillframe.ico -->
+  <rect x="2" y="2" width="62" height="48" rx="7" fill="#fff" stroke="#1C1F24" stroke-width="3"/>
+  <path d="M9 2 H22 V50 H9 A7 7 0 0 1 2 43 V9 A7 7 0 0 1 9 2 Z" fill="#2F5FD0"/>
+  <rect x="7" y="12" width="10" height="3" rx="1.5" fill="#fff" opacity=".9"/>
+  <rect x="7" y="19" width="7" height="3" rx="1.5" fill="#fff" opacity=".7"/>
+  <rect x="7" y="38" width="10" height="5" rx="2" fill="#fff" opacity=".9"/>
+  <rect x="28.5" y="8.5" width="29" height="35" rx="3" fill="none" stroke="#9AA1AA" stroke-width="2" stroke-dasharray="4 3"/>
+</svg>

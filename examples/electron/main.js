@@ -21,7 +21,12 @@ app.whenReady().then(async () => {
   });
   const { url } = await sf.listen();
 
-  const win = new BrowserWindow({ width: 1100, height: 720, show: !smoke, title: "Electron Example" });
+  // the page's <skillframe-titlebar> is the title bar; Electron draws only the window's buttons, over its right end
+  const win = new BrowserWindow({
+    width: 1100, height: 720, show: !smoke, title: "Electron Example",
+    titleBarStyle: "hidden",
+    titleBarOverlay: { height: 40, color: "#00000000", symbolColor: "#6A707A" },
+  });
   await win.loadURL(url);
 
   app.on("window-all-closed", async () => {
@@ -35,7 +40,8 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 50 && !ok; i++) {
       await new Promise((r) => setTimeout(r, 200));
       ok = await win.webContents.executeJavaScript(
-        `(() => { const r = document.querySelector("skillframe-chat")?.shadowRoot; return !!(r && r.querySelector(".bar .agent") && r.querySelector("textarea")); })()`,
+        `(() => { const r = document.querySelector("skillframe-chat")?.shadowRoot; const t = document.querySelector("skillframe-titlebar")?.shadowRoot;
+          return !!(r && r.querySelector(".bar .chat-btn") && r.querySelector("textarea") && t?.querySelector(".name")?.textContent); })()`,
       );
     }
     console.log(ok ? `SMOKE OK ${url} (Electron ${process.versions.electron}, Node ${process.versions.node})` : "SMOKE FAILED: the sidebar did not draw");

@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>skillframe Studio</title>
+  <link rel="icon" href="/icon.svg">
+  <!-- the title bar; the sidebar's own script loads once a project is open -->
+  <script type="module" src="/sf/ui/skillframe-titlebar.js"></script>
   <style>
     :root {
       color-scheme: light dark; font-family: system-ui, sans-serif; font-size: 13px;
@@ -14,7 +17,7 @@
     }
     @media (prefers-color-scheme: dark) { :root { --danger: #FF7B66; } }
     * { box-sizing: border-box; }
-    body { margin: 0; height: 100vh; background: Canvas; color: CanvasText; }
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: Canvas; color: CanvasText; }
     button, input { font: inherit; color: inherit; }
     button { background: none; border: 1px solid transparent; border-radius: 5px; padding: 4px 8px; cursor: pointer; white-space: nowrap; }
     button:hover { background: var(--soft); }
@@ -23,7 +26,7 @@
     [hidden] { display: none !important; }
 
     /* the studio: sidebar, divider, then the project */
-    #studio { height: 100vh; display: grid; grid-template-columns: var(--side, 400px) 6px minmax(0, 1fr); }
+    #studio { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--side, 400px) 6px minmax(0, 1fr); }
     skillframe-chat { min-width: 0; min-height: 0; }
     #divider { cursor: col-resize; border-left: 1px solid var(--line); touch-action: none; }
     #divider:hover, #divider.dragging { background: color-mix(in srgb, Highlight 30%, transparent); }
@@ -62,7 +65,7 @@
     @media (prefers-reduced-motion: reduce) { #run-btn i { animation: none !important; } }
 
     /* opening a project */
-    #start { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+    #start { flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 24px 16px; }
     #start > div { width: min(560px, 100%); }
     #start h1 { font-size: 22px; margin: 0 0 6px; }
     #start p { color: var(--muted); margin: 0 0 20px; line-height: 1.5; font-size: 14px; }
@@ -79,7 +82,7 @@
     #cancel { margin-top: 14px; }
 
     @media (max-width: 760px) {
-      #studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: 45vh minmax(0, 1fr); }
+      #studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: 45% minmax(0, 1fr); }
       #divider { display: none; }
       skillframe-chat { border-bottom: 1px solid var(--line); }
       #name, #open-out { display: none; }
@@ -87,6 +90,7 @@
   </style>
 </head>
 <body>
+  <skillframe-titlebar name="skillframe Studio"></skillframe-titlebar>
   <section id="start" hidden>
     <div>
       <h1>Open a project</h1>
@@ -134,8 +138,10 @@
 
   <script type="module">
     const $ = (id) => document.getElementById(id);
-    // the page speaks the browser's language: English, or Chinese
-    const ZH = (navigator.language || "").toLowerCase().startsWith("zh");
+    // the page speaks the language picked in the title bar's settings (the system's by default): English, or Chinese
+    const { langFor, PREF_EVENT } = await import("/sf/ui/skillframe-prefs.js");
+    const ZH = langFor() === "zh";
+    window.addEventListener(PREF_EVENT, (e) => { if (e.detail.key === "lang" && (langFor() === "zh") !== ZH) location.reload(); });
     const L = (en, zh) => (ZH ? zh : en);
     if (ZH) {
       document.documentElement.lang = "zh";
